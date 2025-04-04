@@ -1,0 +1,187 @@
+        /* --------------------  rexx procedure  -------------------- *
+         * Name:      REXXDOC                                         *
+         *                                                            *
+         * Function:  Create a documentation 'box' within a REXX      *
+         *            Exec based on information in a ISPF PopUp       *
+         *                                                            *
+         * Syntax:    rexxdoc #                                       *
+         *            or                                              *
+         *            rexxdoc #,one line of text                      *
+         *                                                            *
+         *            where # is the number of chars to indent        *
+         *                                                            *
+         *            In the popup panel to get a blank line          *
+         *            use a period (.) in column one only.            *
+         *                                                            *
+         * Author:    Lionel B. Dyck                                  *
+         *            Kaiser Permanente Information Technology        *
+         *            Walnut Creek, CA 94598                          *
+         *            (925) 926-5332                                  *
+         *            Internet: lionel.b.dyck@kp.org                  *
+         *                                                            *
+         * History:                                                   *
+         *            01/05/01 - Fix insert with no number (def 10)   *
+         *            01/04/01 - Support Language Type                *
+         *            01/03/01 - Convert to use table                 *
+         *            12/22/00 - Added . for blank lines in popup     *
+         *            12/22/00 - Added # for indent                   *
+         *            12/22/00 - Creation                             *
+         *                                                            *
+         * ---------------------------------------------------------- */
+         Address ISREdit
+         "MACRO (TEXT) NOPROCESS"
+
+        /* ---------------------------------------------------------- *
+         * Test for a valid target destination                        *
+         * ---------------------------------------------------------- */
+         "Process dest"
+         dest_rc = rc
+         if dest_rc > 0 then do
+            zedsmsg = "Error"
+            zedlmsg = "A destination line must be specified",
+                      "try again."
+            Address ISPExec ,
+               "Setmsg msg(isrz001)"
+            exit 8
+            end
+
+        /* ---------------------------------------------------------- *
+         * Now get the target destination and null variable           *
+         * ---------------------------------------------------------- */
+         "(DEST) = LINENUM .ZDEST"
+         null = ""
+
+        /* ---------------------------------------------------------- *
+         * Test for Indent Value                                      *
+         * ---------------------------------------------------------- */
+         indent = 0
+         if length(text) > 0 then do
+            parse value text with indent "," text2
+            if datatype(indent) = "NUM" then
+               text = text2
+            else indent = 0
+            end
+
+        /* ---------------------------------------------------------- *
+         * Set up the first/last lines                                *
+         * ---------------------------------------------------------- */
+         dash_line  = left("-",58,"-")
+         first_line = left(" ",indent)"/*" dash_line "*"
+         last_line  = left(" ",indent)" *" dash_line "*/"
+         call do_box first_line
+
+        /* ---------------------------------------------------------- *
+         * Test for provided text and if none provided then           *
+         * do the ISPF Table Display Popup.                           *
+         * ---------------------------------------------------------- */
+         if length(text) = 0 then do
+        /* ---------------------------------------------------------- *
+         * Create the ISPF Table                                      *
+         * ---------------------------------------------------------- */
+           Address ISPExec
+           "TBCreate rexxdoc names(rxline)"
+           rxline = null
+        /* ---------------------------------------------------------- *
+         * prefill in 200 rows                                        *
+         * ---------------------------------------------------------- */
+           do i = 1 to 200
+              "Tbadd rexxdoc"
+              end
+           "TBTop rexxdoc"
+           "Addpop"
+        /* ---------------------------------------------------------- *
+         * Now display the table                                      *
+         * ---------------------------------------------------------- */
+           trc = 0
+           do until trc > 4
+             "TBDispl rexxdoc Panel(rexxdoc)"
+             trc = rc
+        /* ---------------------------------------------------------- *
+         * Test for Cancel                                            *
+         * ---------------------------------------------------------- */
+           if zcmd = "CANCEL" then leave
+        /* ---------------------------------------------------------- *
+         * Test for Insert                                            *
+         * ---------------------------------------------------------- */
+           if abbrev("INSERT",word(zcmd,1),1) = 1 then do
+              parse value zcmd with x count
+              zcmd   = null
+              rxline = null
+              if count = null then count = 10
+              "TBBottom rexxdoc"
+              do i = 1 to count
+                 "TBAdd rexxdoc"
+                 end
+              "TBTop rexxdoc"
+              "TBSkip rexxdoc number("ztdtop")"
+              end
+        /* ---------------------------------------------------------- *
+         * Process multiple rows of text                              *
+         * ---------------------------------------------------------- */
+          "TBPut rexxdoc"
+           do i = 1 to ztdsels-1
+              "TBDispl rexxdoc"
+              "TBPut rexxdoc"
+              end
+           end
+        /* ---------------------------------------------------------- *
+         * remove popup and go to top of table                        *
+         * ---------------------------------------------------------- */
+          "Rempop"
+          "TBTop rexxdoc"
+        /* ---------------------------------------------------------- *
+         * Process all entered rows of information, except:           *
+         *   - null rows are ignored                                  *
+         *   - rows with . in column 1 are entered as blank lines     *
+         * ---------------------------------------------------------- */
+           do forever
+              "TBSkip rexxdoc"
+              if rc > 0 then leave
+              rxbox = rxline
+              if length(rxbox) > 0 then do
+                 Address ISREdit
+                 call do_line rxbox
+                 Address ISPExec
+                 end
+              end
+        /* ---------------------------------------------------------- *
+         * Close out the table                                        *
+         * ---------------------------------------------------------- */
+           "TBEnd rexxdoc"
+           Address ISREdit
+           end
+        /* ---------------------------------------------------------- *
+         * Else just add the provided line                            *
+         * ---------------------------------------------------------- */
+         else do
+             call do_line text
+             end
+
+        /* ---------------------------------------------------------- *
+         * Put out the last line of the comment box                   *
+         * ---------------------------------------------------------- */
+         Call do_box last_line
+         exit 0
+
+        /* ---------------------------------------------------------- *
+         * Do_Line Routine                                            *
+         * This routine sets up the comment line between * and        *
+         * then inserts it into the code.                             *
+         * ---------------------------------------------------------- */
+         Do_Line:
+           parse arg data
+           if data = "." then data = " "
+           data = left(" ",indent)" *" left(data,58) "*"
+           "Line_After" dest "= (data)"
+           dest = dest + 1
+           return
+
+        /* ---------------------------------------------------------- *
+         * Do_Box Routine is called to output the first and last      *
+         * lines of the comment box.                                  *
+         * ---------------------------------------------------------- */
+         Do_Box:
+           parse arg data
+           "Line_After" dest "= (data)"
+           dest = dest + 1
+           return

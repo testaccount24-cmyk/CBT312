@@ -1,0 +1,21 @@
+)Attr Default(%+_)
+/* % type(text  ) intens(high)              Defaults displayed for */
+/* + type(text  ) intens(low )                   information only  */
+   _ type( input) intens(high) caps(on ) just(left ) hilite(uscore)
+   ¬ type(output) intens(high) caps(off) just(asis ) color(turq)
+   ~ type(text) intens(low ) caps(off) just(asis ) color(turq)
+         hilite(uscore)
+)Body window(73,15) expand(\\)
+%-\-\-~¬rtitle                          %-\-\-
+%Command ===>_zcmd                        \ \%Scroll ===>_mamt+
++
+\-\Enter CANCEL in the Command line to Exit RUNC processing\-\
++
+)Model
+¬rtext                                                                  +
+)Init
+  .HELP = #RUNC
+  &mamt = CSR
+  &ztdmark = '              --------------- PF3 to Continue ---------------'
+)Proc
+)End

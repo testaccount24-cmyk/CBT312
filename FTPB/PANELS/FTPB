@@ -1,0 +1,152 @@
+)ATTR Default(%+_)
+   + type(text  ) intens(low )
+   _ type( input) intens(high) caps(on ) just(left ) hilite(uscore)
+   ¬ type(text  ) intens(low ) skip(on)
+   @ type( input) intens(high) caps(off) just(left ) hilite(uscore)
+   { type( input) intens(high) caps(on ) just(left ) hilite(uscore)
+   $ type( input) intens(high) caps(off) just(left ) hilite(uscore)
+   ` type( input) intens(non)  caps(off) just(left ) hilite(uscore)
+   % type(text) intens(high)
+   ~ type(text) intens(high) color(blue) hilite(reverse)
+   # type(output) intens(high) color(blue) just(right)
+)BODY Expand(\\)
++\-\-%TCP/IP FTP Dialog+\-\#ftpbver+
+%Command ===>_zcmd
++
++Local  Data Set%=>@ldsname                                                 #s1+
++Remote Data Set%=>@rdsname                                                 #s2+
++
++Remote Information:            Direction%===>_z+ %G+Get,%P+Put+or%S+Sync
++ Hostname or ? %===>@thost                                                   +
++ FTP Port      %===>@thport +  Use TLS%===>@tls+  Use Passive%===>@psv+
++
++User Information:
++   Userid         %===>@userid                                                +
++   Password       %===>`password                                              +
++   Verify Password%===>`passwvfy                                              +
++or NETRC DSname   %===>{usernrc                                       +
++
++Optional Information:
++  z/OS Remote%===>@mvs+%Yes+or%No+Is the Remote system running z/OS?
++  Delta Only %===>@syd+%Yes+or%No+to limit Sync display to Delta Only?
++   Binary    %===>@bin+%Yes+or%No+(use%No+for z/OS to z/OS)
++   Firewall  %===>@fir+ Address if Yes ===>@firewall                          +
++   Initial   %===>$other                                                      +
++  Post cmd   %===>$post                                                       +
+)INIT
+ .zvars = '(ftpgp)'
+ .help = ftpbh0
+ IF (&ldsname = &Z)
+    .cursor = ldsname
+ IF (&ldsname NE &Z)
+    .cursor = zcmd
+ IF (&thport EQ &Z)
+    &thport = 21
+ &mvs = trans(trunc(&mvs,1) &z,Yes Y,Yes N,No y,Yes n,No *,*)
+ &bin = trans(trunc(&bin,1) &z,No  Y,Yes N,No *,*)
+ &fir = trans(trunc(&fir,1) &z,No  Y,Yes N,No *,*)
+ &tls = trans(trunc(&tls,1) &z,No  Y,Yes N,No *,*)
+ &psv = trans(trunc(&psv,1) &z,Yes Y,Yes N,No *,*)
+ &syd = trans(trunc(&syd,1) &z,Yes Y,Yes N,No *,*)
+ &ftpgp = trans(&ftpgp &z,P G,G P,P S,S)
+)PROC
+&mvs = trans(trunc(&mvs,1) &z,Yes Y,Yes N,No y,Yes n,No *,*)
+&bin = trans(trunc(&bin,1) &z,No  Y,Yes N,No y,Yes n,No *,*)
+&fir = trans(trunc(&fir,1) &z,No  Y,Yes N,No y,Yes,n,No *,*)
+&tls = trans(trunc(&tls,1) &z,No  Y,Yes N,No y,Yes,n,No *,*)
+ver (&tls,nb,list,Yes,No)
+&psv = trans(trunc(&psv,1) &z,Yes Y,Yes N,No y,Yes,n,No *,*)
+&syd = trans(trunc(&syd,1) &z,Yes Y,Yes N,No y,Yes,n,No *,*)
+ver (&psv,nb,list,Yes,No)
+&egg = trans(&ldsname egg,EGG *,*)
+if (&egg NE EGG)
+   if (&zcmd = &z)
+      ver (&ldsname,nb)
+      ver (&ftpgp,nb,list,P,G,S)
+      ver (&thost,nb)
+      if (&userid NE &Z & &usernrc NE &Z)
+          &zerrsm  = 'Conflict'
+          &zerrlm  = 'Specify only one of Userid/Password or NETRC DSName'
+          &zerralrm = 'YES'
+          &zerrhm = ' '
+         .MSG = ISRZ002
+      if (&usernrc EQ &Z)
+          ver (&userid,nb)
+      if (&usernrc NE &Z)
+         ver (&usernrc,dsnameq)
+      if (&usernrc EQ &Z)
+          if (&userid NE anonymous)
+             ver (&password,nb)
+             ver (&passwvfy,nb)
+             ver (&password,list,&passwvfy)
+      if (&fir EQ Yes)
+          ver (&firewall,nb)
+      ver (&bin,nb,list,Yes,No)
+      ver (&mvs,nb,list,Yes,No)
+ &resp = .resp
+*rexx(* zedsmsg zedlmsg csr resp ldsname rdsname)
+  if resp = 'END' then exit
+  parse value '' with zedsmsg zedlmsg null
+  if left(ldsname,1) = "'"
+     then if right(ldsname,1) /= "'"
+       then ldsname = ldsname"'"
+  if left(rdsname,1) = "'"
+     then if right(rdsname,1) /= "'"
+       then rdsname = rdsname"'"
+  if pos(ftpgp,'GS') = 0
+  then if mvs /= 'Yes' then do
+    zedsmsg = 'Invalid'
+    zedlmsg = 'Direction of G (Get) or S (Sync) requires the z/OS Target' ,
+      'to be Yes.'
+    csr = 'MVS'
+  end
+  if zedsmsg = null then
+  if ftpgp = 'G' then
+  if pos('*',ldsname) > 0 then do
+    zedsmsg = 'Invalid'
+    zedlmsg = 'An * is not allowed for the From or To Data Set names with' ,
+      'a GET direction.'
+      csr = 'LDSNAME'
+  end
+  if zedsmsg = null then
+  if ftpgp = 'G' then
+  if pos('*',rdsname) > 0 then do
+    zedsmsg = 'Invalid'
+    zedlmsg = 'An * is not allowed for the From or To Data Set names with' ,
+      'a GET direction.'
+      csr = 'RDSNAME'
+  end
+  if usernrc /= null then
+  if left(usernrc,1) /= "'" then do
+    if sysvar('syspref') /= null then uhlq = sysvar('syspref')
+    else uhlq = sysvar('sysuid')
+    usernrc = "'"uhlq"."usernrc"'"
+  end
+*Endrexx
+ IF (&ZEDSMSG NE &Z)
+    .MSG = ISRZ001
+    .CURSOR = &csr
+)Help
+ Field(ldsname)  panel(ftpbhf1)
+ Field(ftpgp)    panel(ftpbhfd)
+ Field(thost)    panel(ftpbhf2)
+ Field(thport)   panel(ftpbhf12)
+ Field(rdsname)  panel(ftpbhf3)
+ Field(userid)   panel(ftpbhf4)
+ Field(password) panel(ftpbhf5)
+ Field(passwvfy) panel(ftpbhf5)
+ Field(mvs)      panel(ftpbhf6)
+ Field(bin)      panel(ftpbhf7)
+ Field(fir)      panel(ftpbhf8)
+ Field(tls)      panel(ftpbhf11)
+ Field(psv)      panel(ftpbhf14)
+ Field(firewall) panel(ftpbhf8)
+ Field(other)    panel(ftpbhf9)
+ Field(post)     panel(ftpbhf10)
+ Field(usernrc)  panel(ftpbhf13)
+)Field
+ Field(ldsname)  IND(s1) LEN(256)
+ Field(rdsname)  IND(s2) LEN(256)
+)END
+/* 2024-01-03  MRM  2.032 Variables sdsname->ldsname, tdsname->rdsname        */
+/*                        From/To nomenclature changed to Local/Remote        */

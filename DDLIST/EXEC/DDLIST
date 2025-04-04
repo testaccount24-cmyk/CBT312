@@ -1,0 +1,478 @@
+/* ---------------------  rexx procedure  ---------------------- *
+ * Name:     DDLIST                                              *
+ *                                                               *
+ * Function: To provide to the TSO ISPF User the ability from    *
+ *           an ISPF Command to display a selection menu of all  *
+ *           data sets for a specified ddname, and optionally    *
+ *           to only display those data sets with a specified    *
+ *           member name.                                        *
+ *                                                               *
+ * Syntax:   %DDLIST ddname(member) option express-option        *
+ *                                                               *
+ *           Where:                                              *
+ *                                                               *
+ *           ddname    is the ddname from which the data sets    *
+ *                     will be selected.                         *
+ *                                                               *
+ *                     Special DDNAME values of LINKLIST or      *
+ *                     LPALIST will process the data sets        *
+ *                     allocated to the current active           *
+ *                     LINK list or LPA list.                    *
+ *                                                               *
+ *                     Special DDNAME values of *PARMLIB,        *
+ *                     *PROCLIB or *PROCnn will process the      *
+ *                     data sets allocated to the system         *
+ *                     concatenations for PARMLIB, PROCLIB and   *
+ *                     JES2 PROCnn concatenation, respectively.  *
+ *                                                               *
+ *           member    is optional and will restrict the display *
+ *                     to just those data sets with that member  *
+ *                                                               *
+ *           option:   BROWSE - use DDNBR table display panel    *
+ *                              and "S" = Browse                 *
+ *                     EDIT   - use DDNED table display panel    *
+ *                              and "S" = Edit                   *
+ *                     EXTENTS- use DDALL table panel and give   *
+ *                              information on number of extents *
+ *                              (ignored if member specified or  *
+ *                              if DD name not LINKLIST and not  *
+ *                              LPALIST)                         *
+ *                     default is to use the DDALL table panel   *
+ *                              (without showing extents)        *
+ *                                                               *
+ *           express:  EXPRESS- used with EDIT or BROWSE, do not *
+ *                              display panel after completing   *
+ *                              edit or browse unless an error   *
+ *                              occurred.                        *
+ *                     default is not to use "EXPRESS"           *
+ *                     processing.                               *
+ *                                                               *
+ *           Required:  ddname                                   *
+ *                                                               *
+ * Author:    Lionel B. Dyck                                     *
+ *            Kaiser Permanente                                  *
+ *            Walnut Creek, CA 94598                             *
+ *            (925) 926-5332                                     *
+ *            Internet: LIONEL.B.DYCK@kp.org                     *
+ *            AIM:    lbdyck                                     *
+ *                                                               *
+ * History:                                                      *
+ *                                                               *
+ *            09/09/2003 - John Bloniarz                         *
+ *                         McDonald's Corporation                *
+ *                         630-623-3224                          *
+ *                         john.bloniarz@mcd.com                 *
+ *                                                               *
+ *              Added support for DD names *PARMLIB (system      *
+ *              PARMLIB concatenation), *PROCLIB (system         *
+ *              PROCLIB concatenation) and *PROCnn (individual   *
+ *              JES2 PROCLIB concatenation).                     *
+ *                                                               *
+ *              Also added "EXPRESS" keyword to bypass panel     *
+ *              display after BROWSE or EDIT.                    *
+ *                                                               *
+ *              Also added "EXTENTS" keyword to show and total   *
+ *              number of extents for LINKLIST and LPALIST.      *
+ *                                                               *
+ *            12/04/95 - Lionel Dyck                             *
+ *            Support  = for selection value.                    *
+ *                                                               *
+ *            07/31/90 - Lionel Dyck                             *
+ *            If option Browse or Edit specified and only 1      *
+ *            data set matches display criteria then enter       *
+ *            Browse or Edit directly.                           *
+ *                                                               *
+ *            07/03/90 - Lionel Dyck                             *
+ *            Remove option X and add P option to invoke the     *
+ *            PDS Dialog via the PDS TSO Command.                *
+ *                                                               *
+ *            06/26/90 - Lionel Dyck                             *
+ *            Updated to support special ddnames of              *
+ *            LINKLIST and LPALIST.  Subroutine to               *
+ *            identify these data sets copied from               *
+ *            Dave ALcock of Rockwell International              *
+ *                                                               *
+ *            06/22/90 - Lionel Dyck                             *
+ *            Updated to support ? for tutorial panels           *
+ *                                                               *
+ *            06/21/90 - Lionel Dyck                             *
+ *            creation of this Rexx procedure.                   *
+ *                                                               *
+ * ------------------------------------------------------------- */
+
+arg opt
+
+parse value "" with save_sel null
+
+Address ISPEXEC
+
+if length(opt) = 0 then do
+   zedsmsg = null
+   xx = sysvar(sysicmd)
+   zedlmsg = "A DDNAME must be specified when executing the" xx "dialog"
+   "SETMSG MSG(ISRZ000)"
+   exit
+   end
+
+express = "N"
+expexit = "N"
+extents = "N"
+numexts = 0
+panel   = "DDALL"
+defcmd  = "BROWSE"
+defcmdd = "Browse"
+
+w1 = word(opt,1)
+if words(opt) > 1 then do
+                        w2 = word(opt,2)
+                        select
+                              when w2      = "BROWSE" then do
+                                   panel   = "DDBR"
+                                   defcmd  = "BROWSE"
+                                   defcmdd = "Browse"
+                                   end
+                              when w2      = "EDIT" then do
+                                   panel   = "DDED"
+                                   defcmd  = "EDIT"
+                                   defcmdd = "Edit"
+                                   end
+                              when w2      = "EXTENTS" then do
+                                   extents = 'Y'
+                                   end
+                              otherwise nop;
+                        end
+end
+
+if words(opt) > 2 then do
+                       w3 = word(opt,3)
+                       if abbrev('EXPRESS',w3,3) = 1 then do
+                          express = 'Y'
+                          end
+                       end
+
+if w1 = "?" then do
+                 select
+                 when panel = "DDALL" then panel = "$DDALL"
+                 when panel = "DDBR"  then panel = "$DDBR"
+                 when panel = "DDED"  then panel = "$DDED"
+                 end
+                 do until rc > 0
+                     "DISPLAY PANEL("panel")"
+                     end
+                 exit
+                 end
+
+parse var w1 ddname "(" member ")"
+
+if length(strip(member)) > 0 then extents = "N"
+
+parse value "" with special_m1 special_m2 special_ddns,
+               ext_m1 ext_m2
+special_rc = 0
+
+ddname1 = left(ddname,1)
+
+
+if ddname = "LINKLIST" |,
+   ddname = "LPALIST" |,
+   ddname = "*PROCLIB" |,
+   ddname = "*PARMLIB" |,
+   (left(ddname,5) = "*PROC" &,
+    datatype(substr(ddname,6)) = "NUM") then call special
+
+if special_rc = 0 then do
+   "VGET (ZSCREEN)"
+
+   table = "DT"zscreen||random()
+
+   "CONTROL ERRORS RETURN"
+
+   "TBCREATE" table "NAMES(WDSN ACT) NOWRITE REPLACE"
+
+   dsn.0 = 0
+   x=ddlist("dsn.",ddname,member)
+
+   return_code = x
+
+   if datatype(dsn.0) <> "NUM" then do
+      dsn.0 = 0
+      return_code = 4
+      end
+
+   do i = 1 to dsn.0
+      wdsn = dsn.i
+      if (ddname = "LINKLIST" |,
+          ddname = "LPALIST") &,
+         extents = 'Y' &,
+         numexts >= 0  then do
+         ldsirc = listdsi("'"wdsn"' NODIRECTORY NOSMSINFO")
+         ldsirc   =  rc
+         ldsiexts = sysextents
+         ldsireas = sysreason
+         if ldsirc = 0 & ldsireas = 0 then do
+            numexts = numexts + ldsiexts
+            act = "XT:" ldsiexts
+            end
+          else do
+            act = "ERR:" ldsirc/ldsireas
+            numexts = -1
+            ext_m1 = "LISTDSI Error"
+            ext_m2 = "Count of extents stopped by LISTDSI",
+                     "error on '"wdsn"', RC =" ldsirc,
+                     "Reason =" ldsireas
+            end
+         end
+      "TBADD" table
+      end
+
+   if (ddname = "LINKLIST" |,
+       ddname = "LPALIST") &,
+      extents = 'Y' &,
+      numexts >= 0  then do
+      ext_m1 = ddname "Extents:" numexts
+      ext_m2 = "The total number of extents for ddname",
+               ddname "is" numexts
+      end
+
+   if ddname = "LINKLIST" | ddname = "LPALIST" then
+         Address TSO "FREE F("ddname")"
+
+   if length(special_ddns) > 0 then
+         Address TSO "FREE F("special_ddns")"
+
+   end
+
+zedsmsg = null
+zedlmsg = null
+
+if length(ext_m1) > 0 |,
+   length(ext_m2) > 0 then do
+   zedsmsg = ext_m1
+   zedlmsg = ext_m2
+   "SETMSG MSG(ISRZ000)"
+   end
+
+select
+  when special_rc > 0 then do
+       zedsmsg = special_m1
+       zedlmsg = special_m2
+       return_code = 24
+       "SETMSG MSG(ISRZ000)"
+       end
+  when return_code = 0 then call doit
+  when return_code = 4 then do
+       "TBEND" table
+       zedlmsg = "No data sets matched the selection criteria:" w1
+       "SETMSG MSG(ISRZ000)"
+       end
+  when return_code = 8 then do
+       "TBEND" table
+       zedlmsg = "Invalid parm passed to the DDLIST program"
+       "SETMSG MSG(ISRZ000)"
+       end
+  when return_code = 12 then do
+       "TBEND" table
+       if ddname = "EDIT" then do
+          zedlmsg = "DDED Requires that a DDNAME be specified"
+          end
+       if ddname = "BROWSE" then do
+          zedlmsg = "DDBR Requires that a DDNAME be specified"
+          end
+       if zedlmsg = null then
+          zedlmsg = "The requested DDNAME:" ddname "is",
+                    "not currently allocated"
+       "SETMSG MSG(ISRZ000)"
+       end
+  when return_code = 16 then do
+       "TBEND" table
+       zedlmsg = "The ARL returned by the RDJFCB macro is invalid"
+       "SETMSG MSG(ISRZ000)"
+       end
+  when return_code = 20 then do
+       "TBEND" table
+       zedlmsg = "No parm was passed to the DDLIST program"
+       "SETMSG MSG(ISRZ000)"
+       end
+  when return_code = 24 then do
+       "TBEND" table
+       zedlmsg = "The requested ISPF Table" table "was not open"
+       "SETMSG MSG(ISRZ000)"
+       end
+  otherwise
+       say "Invalid return code from DDLIST of" return_code
+end
+exit return_code
+
+doit:
+
+parse value "0 0" with lc crp
+
+
+if w2 = "EDIT" | w2 = "BROWSE" then do
+   "TBQUERY" table "ROWNUM("rownum")"
+     if rownum = 1 then do
+                      "TBTOP" table
+                      "TBSKIP" table "NUMBER(1)"
+                      lc = 2
+                      sel = "S"
+                      if express = 'Y' then do
+                         expexit = 'Y'
+                         end
+                      end
+end
+
+Do until lc > 4
+   if lc = 0 then do
+                   sel = null
+                   expexit = 'N'
+                   "TBTOP" table
+                   "TBSKIP" table "NUMBER("crp")"
+                   "TBDISPL" table "PANEL("panel")"
+                   end
+             else if lc = 4 then do
+                   sel = null
+                   expexit = 'N'
+                   "TBDISPL" table
+                   end
+   lc = rc
+   crp = ztdtop
+   if length(sel) > 0 then do
+       if sel = "=" then sel = save_sel
+       save_sel = sel
+       end
+   select
+        when sel = "B" then do
+                       "BROWSE DATASET('"wdsn"')"
+                       src = rc
+                       call bract
+                       call tbput
+                       end
+        when sel = "S" then do
+                       defcmd "DATASET('"wdsn"')"
+                       src = rc
+                       call sact
+                       call tbput
+                       if expexit = 'Y' &,
+                          src < 5 then do
+                          lc = 8
+                          end
+                       end
+        when sel = "E" then do
+                       "EDIT DATASET('"wdsn"')"
+                       src = rc
+                       call edact
+                       call tbput
+                       end
+        when sel = "P" then do
+                       parse value wdsn with xdsn "(" mem ")"
+                       if length(mem) > 0 then
+                          Address TSO "PDSE '"xdsn"' ML" mem
+                       else
+                          Address TSO "PDSE '"xdsn"'"
+                       act = "PDS Command"
+                       call tbput
+                       end
+        when sel = "I" then do
+                       Address TSO "%DDNINFO '"wdsn"'"
+                       act = "Info"
+                       call tbput
+                       end
+        when length(sel) = 0 then nop
+        otherwise           x = prompt("on")
+                            Address TSO sel "'"wdsn"'"
+                            x = prompt("off")
+                            act = sel
+                            call tbput
+        end
+end
+"TBEND" table
+return
+
+tbput:
+   "TBPUT" table
+   act = null
+   return
+
+special:
+
+ddn = null
+
+if ddname = "LPALIST" then do
+/* REXX - List the current LPALST */
+@CVT    = STORAGE(10,4)                      /*L R1,CVTPTR            */
+@SMEXT  = STORAGE(D2X(C2D(@CVT)+1196),4)     /*L R1,CVTSMEXT-CVTMAP(R1*/
+@EPLPS  = STORAGE(D2X(C2D(@SMEXT)+56),4)     /*L R1,CVTEPLPS-CVTVSTGX */
+LPAC    = C2D(STORAGE(D2X(C2D(@EPLPS)+4),4)) /*L R1,LPATCNT(R1)       */
+@EPLPS  = D2X(C2D(@EPLPS)+8)                 /*LA R1,LPATNTRY(R1)     */
+do i = 1 TO LPAC
+   ddw = STORAGE(D2X(X2D(@EPLPS)+1),44)
+   ddn = ddn "'"strip(ddw)"'"
+   @EPLPS = D2X(X2D(@EPLPS)+45)              /* Bump to nxt 45byte ent*/
+   end
+   call doalloc
+   return
+end
+
+
+if ddname = "LINKLIST" then do
+/* REXX - List the current LNKLST */
+@CVT    = STORAGE(10,4)                     /* L R1,CVTPTR            */
+@LLTA   = STORAGE(D2X(C2D(@CVT)+1244),4)    /* L R1,CVTLLTA-CVTMAP(R1)*/
+LNKC    = C2D(STORAGE(D2X(C2D(@LLTA)+4),4)) /* L R1,LLTCOUNT(R1)      */
+@LLTA   = D2X(C2D(@LLTA)+8)                 /* LA R1,LLTENTRY(R1)     */
+do i = 1 TO LNKC
+   ddw = storage(d2x(x2d(@llta)+1),44)
+   ddn = ddn "'"strip(ddw)"'"
+   @LLTA = D2X(X2D(@LLTA)+45)               /* Bump to nxt 45 byte ent*/
+   end
+   call doalloc
+   return
+end
+
+
+if left(ddname,1) = "*" then do
+/* REXX - allocate PROC or PARM data sets */
+sddname = ddname
+ddname = "#"||substr(ddname,2)
+ddns = LSTPROC('* FUNCTION 'ddname)
+if datatype(ddns) <> 'NUM' then do
+    special_ddns = ddns
+    end
+  else do
+    special_rc = ddns
+    special_m2 = "The requested DDNAME:" sddname "could",
+                 "not be located"
+       "SETMSG MSG(ISRZ000)"
+    end
+return
+end
+
+sact:
+     if defcmd = "BROWSE" then call bract
+                          else call edact
+     return
+
+bract:
+  select
+     when src = 12 then act = "0 length data"
+     when src = 14 then act = "Member not found"
+     when src = 16 then act = "No members"
+     when src = 20 then act = "Severe error"
+     otherwise act = "Browse"
+     end
+  return
+
+edact:
+  select
+     when src = 4  then act = "Data not saved"
+     when src = 14 then act = "Member in use"
+     when src = 16 then act = "No members "
+     when src = 20 then act = "Severe error"
+     otherwise act = "Edit"
+     end
+  return
+
+doalloc:
+  x = msg("off")
+  Address TSO "ALLOC FILE("ddname") DS("ddn") SHR"
+  return

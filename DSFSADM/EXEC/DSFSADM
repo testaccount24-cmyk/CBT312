@@ -1,0 +1,31 @@
+/* --------------------  rexx procedure  -------------------- *
+ | Name:      dsfsadm                                         |
+ |                                                            |
+ | Function:  drive the dsfsmenu for Operator or user         |
+ |                                                            |
+ | Syntax:    %dsfsadm A or D or U                            |
+ |            A = Admin or D = dsasm or U = user              |
+ |                                                            |
+ | Usage Notes: altlibs/libdefs                               |
+ |                                                            |
+ | Author:    Lionel B. Dyck                                  |
+ |                                                            |
+ | History:  (most recent on top)                             |
+ |            2023/09/04 LBD - add user                       |
+ |            2023/09/02 LBD - update                         |
+ |            2023/08/22 LBD - revise options                 |
+ |            2023/08/20 LBD - Creation                       |
+ |                                                            |
+ * ---------------------------------------------------------- */
+ arg option
+
+ exec   = "'HLQ.dsfsadm.exec'"    /* changed during receive */
+ panels = "'HLQ.dsfsadm.panels'"    /* changed during receive */
+
+ 'altlib activate dataset('exec') application(exec)'
+ address ispexec
+ 'libdef ispplib dataset id('panels') stack'
+ 'Select cmd(%dsfsmenu' option')'
+ 'libdef ispplib'
+ address tso
+ 'altlib deactivate application(exec)'

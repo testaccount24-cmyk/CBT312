@@ -1,0 +1,7 @@
+To install:
+
+1) Copy member EXEC into your SYSEXEC or SYSPROC library as member
+   REXXDOC
+
+2) Copy member Panel into your ISPPLIB (ISPF Panels) library as
+   member REXXDOC

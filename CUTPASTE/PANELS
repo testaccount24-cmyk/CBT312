@@ -1,0 +1,484 @@
+./ ADD NAME=#CUT
+%TUTORIAL ---------------- CUT and PASTE Edit Macros ------------------ TUTORIAL
+%Command ===>_ZCMD
+%
+%                           -----------------------
+%                           | General Information |
+%                           -----------------------
+%
++The%CUT+and%PASTE+edit macros allow you to copy or move data from one edit
++session to another.
++
+%CUT+copies or moves data from an edit session to a temporary ISPF table.
+%PASTE+copies or moves that data from the ISPF table into another edit session.
++
++The edit sessions may be concurrent using split screen.
++Or data may be cut from an edit session and pasted during a later edit session.
++The temporary ISPF table is destroyed when you exit ISPF.
++
++The following topics are presented in sequence, or may be selected by number:
+%  1+- A simple example -- copy data from one screen to another
+%  2+- An overview of CUT and PASTE
+%  3+- The CUT edit macro -- copy/move data into a table
+%  4+- The PASTE edit macro -- copy/move data from a table
+%  5+- Nesting CUT and PASTE within another edit macro
+)INIT
+&ZUP = #CUT
+)PROC
+&ZSEL = TRANS(&ZCMD 1,CUTTUT1
+                    2,CUTTUT2
+                    3,CUTTUT3
+                    4,CUTTUT4
+                    5,CUTTUT5
+                    *,?)
+)END
+./ ADD NAME=#PASTE
+%TUTORIAL ---------------- CUT and PASTE Edit Macros ------------------ TUTORIAL
+%Command ===>_ZCMD
+%
+%                           -----------------------
+%                           | General Information |
+%                           -----------------------
+%
++The%CUT+and%PASTE+edit macros allow you to copy or move data from one edit
++session to another.
++
+%CUT+copies or moves data from an edit session to a temporary ISPF table.
+%PASTE+copies or moves that data from the ISPF table into another edit session.
++
++The edit sessions may be concurrent using split screen.
++Or data may be cut from an edit session and pasted during a later edit session.
++The temporary ISPF table is destroyed when you exit ISPF.
++
++The following topics are presented in sequence, or may be selected by number:
+%  1+- A simple example -- copy data from one screen to another
+%  2+- An overview of CUT and PASTE
+%  3+- The CUT edit macro -- copy/move data into a table
+%  4+- The PASTE edit macro -- copy/move data from a table
+%  5+- Nesting CUT and PASTE within another edit macro
+)INIT
+&ZUP = #CUT
+)PROC
+&ZSEL = TRANS(&ZCMD 1,CUTTUT1
+                    2,CUTTUT2
+                    3,CUTTUT3
+                    4,CUTTUT4
+                    5,CUTTUT5
+                    *,?)
+)END
+./ ADD NAME=CUTPRMPT
+%------------------------- CUT Edit Macro Parameters ---------------------------
+%Command ===>_ZCMD
+%
++Action%===>_CUT     +         (REPLACE, EXTEND, SHOW, DELETE, PROFILE, HELP, ?)
++
++The following parameter is required for actions%REPLACE, EXTEND, SHOW, DELETE:+
++   Table name%===>_TABLE   +                   (alphanumeric, first char alpha)
++
++The following optional parameters apply only to actions%REPLACE+and%EXTEND:+
++
++   Exclude status%===>_Z  +                    (X or NX)
++
++   Override column bounds:
++      Left column  %===>_Z  +                  (1 - 255)
++      Right column %===>_Z  +                  (1 - 255)
++
++   The following parameters may be used instead of line commands
++   (C, CC, Cn, or M, MM, Mn):
++      Range command%===>_Z   +                 (COPY or MOVE)
++      Top line     %===>_TCUT  +               (line label, e.g., .ZFIRST)
++      Bottom line  %===>_BCUT  +               (line label, e.g., .ZLAST)
+)INIT
+
+ .ZVARS = '(STATUS LCUT RCUT CMDCUT)'
+ .CURSOR = CUT
+ .HELP = #CUT
+ &CMDCUT = TRANS(TRUNC(&CMDCUT,1) C,COPY M,MOVE)
+
+)PROC
+
+ &CUT = TRANS(TRUNC(&CUT,1)
+          R,REPLACE
+          E,EXTEND
+          S,SHOW
+          D,DELETE
+          P,PROFILE
+          H,HELP
+        '?','?'
+          *,*)
+ VER (&CUT,NONBLANK,LIST,REPLACE,EXTEND,SHOW,DELETE,PROFILE,HELP,'?')
+ VER (&TABLE,NONBLANK,NAME)
+ &STATUS = TRANS(TRUNC(&STATUS,1) N,NX X,X *,*)
+ VER (&STATUS,NONBLANK,LIST,NX,X)
+ VER (&LCUT,NUM) VER (&LCUT,RANGE,1,255)
+ VER (&RCUT,NUM) VER (&RCUT,RANGE,1,255)
+ IF  (&LCUT ¬= &Z) VER (&RCUT,NONBLANK)
+ IF  (&RCUT ¬= &Z) VER (&LCUT,NONBLANK)
+ &CMDCUT = TRUNC(&CMDCUT,1) VER (&CMDCUT,NONBLANK,LIST,C,M)
+ &TEST = TRUNC(&TCUT,1) VER (&TEST,PICT,'.')  &TEST = .TRAIL  VER (&TEST,ALPHA)
+ &TEST = TRUNC(&BCUT,1) VER (&TEST,PICT,'.')  &TEST = .TRAIL  VER (&TEST,ALPHA)
+ IF  (&BCUT ¬= &Z)  VER (&TCUT,NONBLANK)
+
+)END
+./ ADD NAME=CUTPROF
+%------------------ CUT/PASTE Edit Macro Profile Parameters --------------------
+%Command ===>_ZCMD
+%
++Default table name  %===>_TABLE   +            (alphanumeric, first char alpha)
++
++CUT macro default parameters:
++   Action           %===>_CUT    +             (REPLACE, EXTEND, or PROMPT)
++   Exclude status   %===>_STATUS     +         (X or NX)
++   Left column      %===>_Z  +                 (1 - 255)
++   Right column     %===>_Z  +                 (1 - 255)
++   Range command    %===>_Z   +                (COPY or MOVE)
++   Range top line   %===>_TCUT  +              (line label, e.g. .ZFIRST)
++   Range bottom line%===>_BCUT  +              (line label, e.g. .ZLAST)
++
++PASTE macro default parameters:
++   Action           %===>_PASTE +              (COPY, MOVE, or PROMPT)
++   At               %===>_AT +                 (1 - 255)
++   Left column      %===>_Z  +                 (1 - 255)
++   Right column     %===>_Z  +                 (1 - 255)
++   Range command    %===>_Z      +             (AFTER, BEFORE, or OVERLAY)
++   Range top line   %===>_TPASTE+              (line label, e.g. .ZFIRST)
++   Range bottom line%===>_BPASTE+              (line label, e.g. .ZLAST)
+)INIT
+
+ .ZVARS = '(LCUT RCUT CMDCUT LPASTE RPASTE CMDPASTE)'
+ .CURSOR = TABLE
+ .HELP = #CUT
+ &CMDCUT = TRANS(&CMDCUT C,COPY M,MOVE)
+ &CMDPASTE = TRANS(&CMDPASTE A,AFTER B,BEFORE O,OVERLAY)
+
+)PROC
+
+ VER (&TABLE,NONBLANK,NAME)
+ &CUT = TRANS(TRUNC(&CUT,1) R,REPLACE E,EXTEND P,PROMPT *,*)
+ VER (&CUT,NONBLANK,LIST,REPLACE,EXTEND,PROMPT)
+ &STATUS = TRANS(TRUNC(&STATUS,1) N,NX X,X *,*)
+ VER (&STATUS,LIST,NX,X)
+ VER (&LCUT,NUM) VER (&LCUT,RANGE,1,255)
+ VER (&RCUT,NUM) VER (&RCUT,RANGE,1,255)
+ &CMDCUT = TRANS(TRUNC(&CMDCUT,1) C,COPY M,MOVE *,*)
+ VER (&CMDCUT,LIST,COPY,MOVE)
+ &TEST = TRUNC(&TCUT,1) VER (&TEST,PICT,'.')  &TEST = .TRAIL VER (&TEST,ALPHA)
+ &TEST = TRUNC(&BCUT,1) VER (&TEST,PICT,'.')  &TEST = .TRAIL VER (&TEST,ALPHA)
+ &PASTE = TRANS(TRUNC(&PASTE,1) C,COPY M,MOVE P,PROMPT)
+ VER (&PASTE,NONBLANK,LIST,COPY,MOVE,PROMPT)
+ VER (&AT,NUM) VER (&AT,RANGE,1,255)
+ VER (&LPASTE,NUM) VER (&LPASTE,RANGE,1,255)
+ VER (&RPASTE,NUM) VER (&RPASTE,RANGE,1,255)
+ VER (&CMDCUT,LIST,COPY,MOVE)
+ &TEST = TRUNC(&TPASTE,1) VER (&TEST,PICT,'.') &TEST = .TRAIL VER (&TEST,ALPHA)
+ &TEST = TRUNC(&BPASTE,1) VER (&TEST,PICT,'.') &TEST = .TRAIL VER (&TEST,ALPHA)
+
+ IF  (&LCUT   > &RCUT  ) &TEMP = &LCUT   &LCUT   = &RCUT     &RCUT = &TEMP
+ IF  (&LPASTE > &RPASTE) &TEMP = &LPASTE &LPASTE = &RPASTE &RPASTE = &TEMP
+
+)END
+./ ADD NAME=CUTTUT1
+%TUTORIAL --------- CUT/PASTE Edit Macros: a Simple Example ----------- TUTORIAL
+%Command ===>_ZCMD
+%
++The following example shows two concurrent edit sessions using split screen.
++Data will first be copied from the upper screen via the%CUT+macro,
++then copied into the lower screen via the%PASTE+macro.
++   -----------------------------------------------------------------------
++   |%COMMAND ===> cut                                                   +|
++   |                                                                     |
++   | 000300                                                              |
++   |%CC+400 This block                                                   |
++   | 000500            of three lines                                    |
++   |%CC+600                           will be copied ...                 |
++   | 000700                                                              |
++   |                                                                     |
++   |%.  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .+|
++   |%COMMAND ===> paste                                                 +|
++   |                                                                     |
++   | 000100                                                              |
++   |%A+0200 ... after this line.                                         |
++   | 000300                                                              |
++   |                                                                     |
++   -----------------------------------------------------------------------
+)END
+./ ADD NAME=CUTTUT2
+%------------------- Overview of CUT and PASTE Edit Macros ---------------------
+%Command ===>_ZCMD
+%
++The%CUT+and%PASTE+edit macros work together to transfer data from one edit
++session to another. These sessions may be on different split screens. %CUT+is
++similar to the edit primary commands CREATE and REPLACE, while%PASTE+is similar
++to COPY and MOVE.  However instead of using a data set,%CUT+and%PASTE+use a
++shared temporary ISPF table.
++
+%                               Parameter Syntax
++Parameter syntax is the same as other edit commands. All parameters are
++optional or have default values. Parameters may be abbreviated so long as they
++are unambiguous, and may be specified in lowercase.
++
+%                              Copying and Moving
++Moving is the same as copying, except that the original information is deleted
++after it is moved. The command%CUT REPLACE+copies/moves data to a table,
++replacing any previous data (if any). %CUT EXTEND+leaves data already in a
++table (if any) intact--it copies/moves at the end of the table. The command
+%PASTE COPY+copies data from a table. The data may be pasted any number of
++times. The command%PASTE MOVE+moves data, leaving the table empty.
++
++                          (Press ENTER to continue)
+)PROC
+ &ZCONT = CUTTUT2A
+)END
+./ ADD NAME=CUTTUT2A
+%------------------- Overview of CUT and PASTE Edit Macros ---------------------
+%Command ===>_ZCMD
+%
+%                  Specifying Line Location Via Line Commands
++
++There are two ways of specifying where lines of data are to be cut or pasted.
++The first is via line commands. When you use the%CUT+command, you specify
++copying via the%C, CC,+or%Cn+line commands. You specify moving via the%M, MM,
++or%Mn+commands.%C+and%M+specify a single line.%CC+and%MM+specify a first and
++last line.%Cn+and%Mn+specify a number of lines (e.g.,%C5+or%M12).+
++
++When you use the%PASTE+command, you specify the location to receive data via
++the%A, B, O, OO,+or%On+line commands.%A+specifies copying/moving after the
++designated line. %B+specifies copying/moving before the designated line.%O,
+%OO,+or%On+specify overlaying the designated line(s).
++
++
++
++
++
++
++
++                          (Press ENTER to continue)
+)PROC
+ &ZCONT = CUTTUT2B
+)END
+./ ADD NAME=CUTTUT2B
+%------------------- Overview of CUT and PASTE Edit Macros ---------------------
+%Command ===>_ZCMD
+%
+%                   Specifying Line Location Via Parameters
++
++The other way to specify where lines of data are to be cut or pasted is to use
++parameters on the%CUT+and%PASTE+commands. You may specify%CUT COPY range+or
+%CUT MOVE range. "Range"+is either one or two line labels (a label is a period
++followed by a name in the line command area). The first line of data is
++automatically labeled .ZFIRST; the last line is automatically labeled .ZLAST;
++the line containing the cursor is automatically labeled .ZCSR. For example, you
++might say%CUT REPLACE COPY .ZFIRST .ZCSR.+
++
++
++Similarly, you may specify%PASTE AFTER range, PASTE BEFORE range,+or
+%PASTE OVERLAY range.+For example, you might say%PASTE COPY AFTER .ZLAST.+
+%
++
++
++
++
++
++                          (Press ENTER to continue)
+)PROC
+ &ZCONT = CUTTUT2C
+)END
+./ ADD NAME=CUTTUT2C
+%------------------- Overview of CUT and PASTE Edit Macros ---------------------
+%Command ===>_ZCMD
+%
+%                           Specifying Column Bounds
++Rather than cutting and pasting entire lines, portions of lines may be
++specified. The default is to copy/move data within the current BOUNDS setting.
++The default BOUNDS setting is the entire line.  You can override your current
++BOUNDS via%CUT+parameters:%CUT col-1 col-2,+where%"Col-1"+and%"col-2"+are
++column numbers. For example,%CUT 1 72.%PASTE+without overlay honors the columns
++used by%CUT,+ignoring the current BOUNDS.
++
+%                              PASTE With Overlay
++Overlay replaces portions of lines. The default is to overlay data within the
++current BOUNDS columns. The original cut bounds are honored, and data outside
++the current BOUNDS is truncated. You can override the current BOUNDS via%PASTE+
++parameters:%PASTE col-1 col-2.+You can also override the original cut bounds in
++two ways. One way is to place the cursor within the data at the column where
++you wish the cut data to be placed. The other way is to use the%AT+parameter to
++specify the desired column. For example%PASTE AT 17.
++
++
++
++                          (Press ENTER to continue)
+)PROC
+ &ZCONT = CUTTUT2D
+)END
+./ ADD NAME=CUTTUT2D
+%------------------- Overview of CUT and PASTE Edit Macros ---------------------
+%Command ===>_ZCMD
+%
+%                        Excluded and Nonexcluded Lines
++Normally all lines specified for%CUT+are copied/moved. However you can specify
++that only excluded or only nonexcluded lines will be copied/moved via the%X+and
+%NX+parameters (i.e.,%CUT X+or%CUT NX).
++
+%                               Multiple Tables
++You may use as many tables as you wish via the%TABLE+parameter. This allows you
++to have multiple pieces of cut data with easily remembered names.  The name
++must be 1 to 8 alphanumeric characters, with the first character alphabetic.
++The name must not be the same as any table in your table libraries. For example
+%CUT TABLE cutpaste+and%PASTE TABLE cutpaste.
++
+%                            Displaying Table Data
++You may display the data in a table via%CUT SHOW.+The data will be displayed as
++edit NOTE lines, preceded by a MSG line containing the data set name, member
++name, and the bounds of the data.
++
++
++
++                          (Press ENTER to continue)
+)PROC
+ &ZCONT = CUTTUT2E
+)END
+./ ADD NAME=CUTTUT2E
+%------------------- Overview of CUT and PASTE Edit Macros ---------------------
+%Command ===>_ZCMD
+%
+%                             Deleting Table Data
++Data is automatically deleted via%CUT REPLACE+and%PASTE MOVE.+In addition, you
++may specify%CUT DELETE.+For example,%CUT DELETE TABLE example.
++
+%                           Prompting for Parameters
++To make it easier to remember the parameters, you may specify%CUT PROMPT+and
+%PASTE PROMPT.+This will display a data entry panel on which you can enter
++parameters.
++
+%                        Specifying Default Parameters
++You may specify your own default parameters by specifying%CUT PROFILE.+This
++Will display a data entry panel on which you can enter parameters which will be
++remembered across ISPF sessions. The initial defaults are:
+%                      CUT   REPLACE TABLE cutpaste COPY
+%                      PASTE COPY    TABLE cutpaste AFTER
++
++
+%                           Displaying this Tutorial
++This tutorial may be displayed via%CUT HELP, CUT ?, PASTE HELP,+or%PASTE ?.
+)END
+./ ADD NAME=CUTTUT3
+%TUTORIAL ---------------------- CUT Edit Macro ----------------------- TUTORIAL
+%Command ===>_ZCMD
+%
+%     CUT  <REPLACE >  <TABLE table>  <NX>  <col-1 col-2>  <COPY>  <range>
+%          <EXTEND  >                 <X >                 <MOVE>
+%          <SHOW    >
+%          <DELETE  >
+%          <PROMPT  >
+%          <PROFILE >
+%          <HELP | ?>
++
++All parameters are optional except that%REPLACE+and%EXTEND+require either a
+%range+of lines or the following line commands:
++    %C, CC,+or%Cn+- to copy one or more lines to the table
++    %M, MM,+or%Mn+- to move one or more lines to the table
++
++Parameters may be specified in any order, and may be abbreviated.
++If a parameter is not specified, a default is taken from your CUT/PASTE
++profile (see the PROFILE parameter). The initial profile values are:
++     CUT REPLACE TABLE cutpaste COPY
++
++
++                   (Press ENTER for parameter definitions)
+)PROC
+
+ &ZCONT = CUTTUT3A
+
+)END
+./ ADD NAME=CUTTUT3A
+%TUTORIAL ---------------- CUT Edit Macro Parameters ------------------ TUTORIAL
+%Command ===>_ZCMD
+%
+%REPLACE    +Copy/move lines starting at the beginning of a table.
+%EXTEND     +Copy/move lines starting at the end of a table.
+%SHOW       +Display the contents of a table as edit note lines.
+%DELETE     +Delete all lines from a table.
+%PROMPT     +Display a parameter entry panel.
+%PROFILE    +Set default parameter values.
+%HELP or ?  +Display this tutorial.
+%TABLE table+Name of a table to hold lines. You may have as many as you like,
++            but they must not duplicate names in your table library.
+%NX         +Copy/move only nonexcluded lines.
+%X          +Copy/move only excluded lines.
+%col-1 col-2+Left and right column boundaries for copy/move (overrides BOUNDS).+
+%COPY       +Copy lines if specified by%range+into a table
++            (instead of%C, CC, Cn+line commands).
+%MOVE       +Move lines if specified by%range+into a table
++            (instead of%M, MM, Mn+line commands).
+%range      +One or two line labels which specify the top and bottom lines to be
++            copied/moved (e.g., .ZFIRST .ZLAST).  Used in conjunction with
++           %COPY+or%MOVE+parameter.
+)END
+./ ADD NAME=CUTTUT4
+%TUTORIAL --------------------- PASTE Edit Macro ---------------------- TUTORIAL
+%Command ===>_ZCMD
+%
+%   PASTE  <COPY    >  <TABLE table>  <AT at>  <col-1 col-2>  <AFTER  >  <range>
+%          <MOVE    >                                         <BEFORE >
+%          <PROMPT  >                                         <OVERLAY>
+%          <HELP | ?>
++
++All parameters are optional except that%COPY+and%MOVE+require either a
+%range+of lines or the following line commands:
++     %A           +- to put table lines after a specific line
++     %B           +- to put table lines before a specific line
++     %O, OO,+or%On+- to overlay lines with table lines
++
++Parameters may be specified in any order, and may be abbreviated.
++If a parameter is not specified, a default is taken from your CUT/PASTE
++profile (see the CUT PROFILE parameter). The initial profile values are:
++      PASTE COPY TABLE cutpaste AFTER
++
++
++
++
++                   (Press ENTER for parameter definitions)
+)PROC
+
+ &ZCONT = CUTTUT4A
+
+)END
+./ ADD NAME=CUTTUT4A
+%TUTORIAL --------------------- PASTE Edit Macro ---------------------- TUTORIAL
+%Command ===>_ZCMD
+%
+%COPY       +Copy lines from a table.
+%MOVE       +Move lines from a table.
+%PROMPT     +Display a parameter entry panel.
+%HELP or ?  +Display this tutorial.
+%TABLE table+Name of table to hold lines. You may have as many as you like, but
++            they must not duplicate names in your table library.
+%AT at      +Column number used instead of the left bound of the lines in a
++            table.  As an alternative, place the cursor within the data at the
++            column to be used as the left bound.
+%col-1 col-2+Left and right column boundaries for copy/move (overrides BOUNDS).
+%AFTER      +Copy/move table lines after line specified by%range+
++            (instead of%A+line command).
+%BEFORE     +Copy/move table lines before line specified by%range+
++            (instead of%B+line command).
+%OVERLAY    +Overlay lines specified by%range+with lines copied/moved from table
++            (instead of%O, OO, On+line commands).
+%range      +One or two line labels which specify the top and bottom lines to be
++            copied/moved (e.g., .ZFIRST .ZLAST).  Used in conjunction with
++           %AFTER, BEFORE,+or%OVERLAY+parameter.
+)END
+./ ADD NAME=CUTTUT5
+%TUTORIAL ------ Nesting CUT and PASTE Within Other Edit Macros ------- TUTORIAL
+%Command ===>_ZCMD
+%
+%CUT+and%PASTE+may be invoked from within an edit macro as follows:
++
+%     ISREDIT CUT ... range
++
+%     ISREDIT PASTE ... range
++
++Note that a%range+is required. In other words line commands are not used.
++This is because%CUT+and%PASTE+do not specify ISREDIT PROCESS when they are
++invoked as nested macros. Therefore the higher level macro(s) can process their
++own line commands without conflict with%CUT+and%PASTE.+
+)END

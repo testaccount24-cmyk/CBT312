@@ -1,0 +1,57 @@
+)attr default(%+_)
+  $ type(text) intens(high) color(blue)
+  ~ type(text) intens(high) color(blue) hilite(reverse)
+  +   type(text) intens(low) skip(on)
+  % type(text) intens(high)
+  ` type(input)
+  _ type(input) pad('_') caps(on)
+)Body Expand(\\)
+%-\-\- ~CSV ISPF Edit Macro Prompt &ver%-\-\-
++Command ===>`zcmd
++
+~Enter the Start Columns+                 ~Preserve leading zeros:_lz +Yes or No
+$    01     02     03     04     05     06     07     08     09     10     11
+ =>_z  +=>_z  +=>_z  +=>_z  +=>_z  +=>_z  +=>_z  +=>_z  +=>_z  +=>_z  +=>_z  +
+$    12     13     14
+ =>_z  +=>_z  +=>_z  +
++
++Separator character:_z+         Default is ,
++
+~Records to Ignore (column 0 = any column)+
++
+~Column   Data (text of ' ' for blank)+
++  _i1 + _d1                                                 +
++  _i2 + _d2                                                 +
++  _i3 + _d3                                                 +
++  _i4 + _d4                                                 +
++  _i5 + _d5                                                 +
++  _i6 + _d6                                                 +
++
+~ Convert Signed Fields_s1+ (Y/N)
+
+~PF3 to cancel or Enter to continue+
+)Init
+ .help = csvedith
+ .zvars = '(c1 c2 c3 c4 c5 c6 c7 c8 c9 ca cb cc cd ce char)'
+ &lz = trans (trunc(&lz,1) Y,YES N,NO &z,YES)
+ &char = trans(&char &z,',' *,*)
+)Proc
+ .cursor = c1
+ &lz = trans (trunc(&lz,1) Y,YES N,NO &z,YES *,*)
+ ver (&lz,nb,list,YES,NO)
+ ver (&c1,nb)
+ ver (&c1,num)
+ ver (&c2,num)
+ ver (&c3,num)
+ ver (&c4,num)
+ ver (&c5,num)
+ ver (&c6,num)
+ ver (&c7,num)
+ ver (&c8,num)
+ ver (&c9,num)
+ ver (&ca,num)
+ ver (&cb,num)
+ ver (&cc,num)
+ ver (&cd,num)
+ ver (&ce,num)
+)End

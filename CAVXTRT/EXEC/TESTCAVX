@@ -1,0 +1,73 @@
+        /* --------------------  rexx procedure  -------------------- *
+         * Name:      testcavx                                        *
+         *                                                            *
+         * Function:  Test CAVXTRT Defaults                           *
+         *                                                            *
+         * Syntax:    %testcavx                                       *
+         *                                                            *
+         * Author:    Lionel B. Dyck                                  *
+         *            Kaiser Permanente Information Technology        *
+         *            Walnut Creek, CA 94598                          *
+         *            (925) 926-5332                                  *
+         *            Internet: lionel.b.dyck@kp.org                  *
+         *                                                            *
+         * History:                                                   *
+         *            02/25/02 - Creation                             *
+         *                                                            *
+         * ---------------------------------------------------------- */
+
+         ispf = sysvar('sysispf')
+
+         call cavxtrtd
+         c = queued()
+
+         do i = 1 to c
+            parse pull in
+            in.i = in
+            end
+         in.0 = c
+
+         do i = 1 to in.0
+            test = word(in.i,1)
+            Select
+            When test = "DB" then do
+                 parse var in.i  x db desc
+                 if sysdsn("'"db".SARDBASE.D0000001'") <> "OK" then do
+                    c = in.0 + 1
+                    in.c = "Database" db "is not a valid database."
+                    in.0 = 1
+                    end
+                 end
+            When test = "PANELS" then do
+                 parse var in.i  x dsn
+                 if sysdsn(dsn) <> "OK" then do
+                    c = in.0 + 1
+                    in.c = "Panel Library" panels sysdsn(dsn)
+                    in.0 = 1
+                    end
+                 end
+            When test = "TABLES" then do
+                 parse var in.i  x dsn
+                 if sysdsn(dsn) <> "OK" then do
+                    c = in.0 + 1
+                    in.c = "Table Library" tables sysdsn(dsn)
+                    in.0 = 1
+                    end
+                 end
+             Otherwise nop
+            end
+            end
+
+         if sysvar('sysispf') = "ACTIVE" then do
+            cavx_dd = "C"random()
+            "allocate file("cavx_dd") reuse unit(sysda) space(1 1)" ,
+                     "tr dsorg(ps) recfm(v b) lrecl(255)"
+            "execio * diskw" cavx_dd "(finis stem in.)"
+            Address ISPEXEC "LMINIT DATAID(DATAID) DDNAME("cavx_dd")"
+            Address ISPEXEC "BROWSE DATAID("dataid")"
+            Address ISPEXEC "LMFREE DATAID("dataid")"
+            "FREE FILE("cavx_dd")"
+            end
+         else do i = 1 to in.0
+              say in.i
+              end

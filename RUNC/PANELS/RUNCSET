@@ -1,0 +1,66 @@
+)Attr Default(%+_)
+   $ type( input) intens(high) caps(on ) just(left ) hilite(uscore)
+   @ type( input) intens(high) caps(on ) just(right) hilite(uscore)
+   + TYPE(TEXT)  INTENS(LOW)  SKIP(ON) COLOR(GREEN)
+)Body expand(\\)
+%-\-\-+RUNC User Review/Update Defaults%-\-\-
+%Command ===>_zcmd                     \ \+
++
++   $z+(Y/N)   +-B Browse the generated report of all messages
++   $z+(Y/N)   +-T No report - all messages to the terminal
++   $z+(Y/N)   +-V View the generated report of all messages
++   $z+(D/P/N) +-L Log all messages to a permanent dataset
++   $z+(Y/N)   +-D No report - all messages inserted as Data records
++                Data Prefix: $rdp                                    +
++   $z+(Y/N)   +-N No report - all messages inserted as Notelines
++   $z+(Y/N)   +-R Generate a report of all messages
++   $z+(Y/N)   +-BS Bypass prompt for supported symbolics
++   $z+(Y/N)   +-I Display Individual Command messages
++ @z  +(###)   +-S Stop multiple command processing if return code exceeds nnn
++ @z  +(###)   +-W Wrap%-D+and%-N+messages to nnn characters (W = Data Width)
++   $z+(Y/N)   + Save as permanent defaults
++
++ Notes:      1.%-D+and%-N+override%-B -I -T -V+and%-L
++             2.%-T+override%-D -I -N -R+and%-L
++
++             Press PF3 to continue\ \
+)Init
+ .zvars = '(rbo rto rvo rlo rdo rno rro rbs rio rso rwo rpo)'
+ .cursor = rbo
+ .help = #runcset
+)Proc
+ ver (&rbo,nb,list,Y,N)
+ ver (&rto,nb,list,Y,N)
+ ver (&rvo,nb,list,Y,N)
+ ver (&rlo,nb,list,D,P,N)
+ ver (&rdo,nb,list,Y,N)
+ ver (&rno,nb,list,Y,N)
+ ver (&rpo,nb,list,Y,N)
+ ver (&rro,nb,list,Y,N)
+ ver (&rbs,nb,list,Y,N)
+ ver (&rio,nb,list,Y,N)
+ ver (&rso,num)
+ if (&rwo NE 'W')
+    ver (&rwo,num)
+ &zedsmsg = &z
+ if (&rto EQ Y)
+    &zedlmsg = '-T overrides -R and -I'
+    ver (&rro,list,'N',msg=isrz001)
+ if (&rno EQ Y)
+    &zedlmsg = '-N requires -B -D -I -T -V and -L'
+    ver (&rbo,list,'N',msg=isrz001)
+    ver (&rdo,list,'N',msg=isrz001)
+    ver (&rlo,list,'N',msg=isrz001)
+    ver (&rto,list,'N',msg=isrz001)
+    ver (&rio,list,'N',msg=isrz001)
+    ver (&rvo,list,'N',msg=isrz001)
+ else
+ if (&rdo EQ Y)
+    &zedlmsg = '-D requires -B -N -I -T -V and -LN'
+    ver (&rbo,list,'N',msg=isrz001)
+    ver (&rlo,list,'N',msg=isrz001)
+    ver (&rno,list,'N',msg=isrz001)
+    ver (&rto,list,'N',msg=isrz001)
+    ver (&rio,list,'N',msg=isrz001)
+    ver (&rvo,list,'N',msg=isrz001)
+)End

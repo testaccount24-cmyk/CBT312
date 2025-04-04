@@ -1,0 +1,28 @@
+)Attr Default(%+_)
+/* % type(text  ) intens(high)              Defaults displayed for */
+/* + type(text  ) intens(low )                   information only  */
+/* _ type( input) intens(high) caps(on ) just(left )               */
+   ! type( input) intens(high) caps(on ) just(left ) pad('_')
+   @ type(output) intens(high) caps(on ) just(left )
+   ê type(output) intens(low ) caps(off) just(asis )
+)Body
+%Browse+--------------%Data Sets Concatenated to:@ddname  +---------------------
+%Command ===>_zcmd                                            %Scroll ===>_amt +
+%
++Valid Selections:%S+Browse %E+Edit %I+Info on Dataset %P+PDS %any TSO command+
++
+%Cmd        Data Set Name                                     Status
++
+)Model
+!z        +êz                                                êz
+)Init
+  .ZVARS = '(sel wdsn act)'
+  .help  = $DDBR
+  &amt = CSR
+)Reinit
+)Proc
+                                  /* Process )BODY fields here      */
+  If (&ztdsels NE 0000)           /* If user selected some rows ... */
+                                  /* ... process )MODEL fields here */
+  ver (&sel,nonblank)
+)End

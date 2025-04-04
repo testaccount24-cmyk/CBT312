@@ -1,0 +1,227 @@
+/* --------------------  rexx procedure  -------------------- *
+ * Name:      OMVSLOG                                         *
+ *                                                            *
+ * Function:  Display a list of all OMVS syslog files and     *
+ *            allow the user to select one to Browse or View  *
+ *                                                            *
+ * Syntax:    %omvslog opt                                    *
+ *                                                            *
+ * Customization required for the location of the syslog      *
+ * log files.                                                 *
+ *                                                            *
+ * Author:    Lionel B. Dyck                                  *
+ *                                                            *
+ * History:                                                   *
+ *            06/30/16 - Add option to select specific        *
+ *                       logs - see *custom*                  *
+ *                     - add Sort, Only and Exclude commands  *
+ *            05/24/16 - Add last used option to table        *
+ *            05/23/16 - Creation                             *
+ *                                                            *
+ * ---------------------------------------------------------- */
+ arg option
+
+/* --------------- *
+ * define defaults *
+ * --------------- */
+ parse value '' with null loghlq  lsortq sortseq
+ lpar = mvsvar('sysname')
+
+/* ----------------------------------------------------- *
+ *             *custom*                                  *
+ *                                                       *
+ * Define the various omvs logs to display:              *
+ *                                                       *
+ *    logdir    = the omvs location and filename(s)      *
+ *    loghlq    = the z/os high level qualifier          *
+ *    lparq     = the qualifier in the z/os dataset name *
+ *                where the lpar name is found (or 0)    *
+ *    logtitle  = title to display on the ispf panel     *
+ *                                                       *
+ * ----------------------------------------------------- */
+ Select
+   /* ----------------------------------------------------- *
+    * SYSLOG - displays the active and current z/OS archive *
+    *          syslogd files.                               *
+    * ----------------------------------------------------- */
+    When option   = 'SYSLOG' then do
+         logdir   = '/u/system/logs/syslogd'
+         loghlq   = 'excprd.omvslog'
+         logtitle = 'OMVS syslogd Display'
+         lparq    = 3
+         end
+   /* --------------------------------------------------- *
+    * PAGENT - display the pagent active log file and all *
+    *          archived log files                         *
+    * --------------------------------------------------- */
+    When option   = 'PAGENT' then do
+         lparp = TRANSLATE(lpar,XRANGE("a","z"),XRANGE("A","Z"))
+         logdir   = '/u/pagent/logs/pagent.'lparp'.log'
+         loghlq   = 'excprd.omvs.pagent'
+         logtitle = 'Pagent log Display'
+         lparq    = 4
+         end
+   /* --------------------------------------------------- *
+    * CRON   - display the cron active log file and all   *
+    *          archived log files                         *
+    * --------------------------------------------------- */
+    When option   = 'CRON' then do
+         logdir   = '/usr/spool/cron/log'
+         loghlq   = 'excprd.omvs.cron'
+         logtitle = 'OMVS cron log Display'
+         lparq    = 4
+         end
+    Otherwise do
+              logdir = '/u/system/logs/syslogd'
+              end
+    end
+
+/* --------------------------------- *
+ * display the selection panel/table *
+ * --------------------------------- */
+ Address ISPExec
+ call build_table
+ savetop = 0
+ do forever
+ if savetop > 0 then do
+    'tbtop olog'
+    'tbskip olog number('savetop')'
+    end
+ lsel = null
+ "TBDispl olog Panel(omvslog)"
+ if rc > 4 then do
+    'TBEnd olog'
+    exit 0
+    end
+
+ savetop = ztdtop
+
+/* -------------------- *
+ * Process any commands *
+ * -------------------- */
+ if zcmd /= null then do
+ 'Control Display Save'
+    if abbrev('REFRESH',zcmd,2) = 1 then do
+       'tbend olog'
+       call build_table
+       zcmd = null
+       end
+    if abbrev('SORT',word(zcmd,1),2) = 1 then
+       Select
+       when word(zcmd,2) = 'DATE' then zcmd = 'SDATE'
+       when word(zcmd,2) = 'LPAR' then zcmd = 'SLPAR'
+       when abbrev('FILENAME',word(zcmd,2),2) = 1 then zcmd = 'SFILE'
+       otherwise nop
+       end
+    if lsortq = 'd' then sortseq = 'a'
+    if lsortq = 'a' then sortseq = 'd'
+    if sortseq = null then sortseq = 'a'
+    lsortq = sortseq
+    if zcmd = 'SDATE' then
+       'tbsort olog fields(ldate,c,'sortseq')'
+    if zcmd = 'SLPAR' then
+       'tbsort olog fields(lpar,c,'sortseq')'
+    if zcmd = 'SFILE' then
+       'tbsort olog fields(lfile,c,'sortseq')'
+   /* process ONLY LPAR option */
+    if abbrev('ONLY',word(zcmd,1),2) = 1 then do
+       tlpar = word(zcmd,2)
+       'tbtop olog'
+       do forever
+          'tbskip olog'
+          if rc > 4 then leave
+          if lpar /= tlpar then
+             'tbdelete olog'
+          end
+       end
+   /* process EXCLUDE LPAR option */
+    if abbrev('EXCLUDE',word(zcmd,1),2) = 1 then do
+       tlpar = word(zcmd,2)
+       'tbtop olog'
+       do forever
+          'tbskip olog'
+          if rc > 4 then leave
+          if lpar = tlpar then
+             'tbdelete olog'
+          end
+       end
+    'Control Display Restore'
+    end
+
+/* -------------------------- *
+ * Process any row selections *
+ * -------------------------- */
+ if lsel /= null then do
+    rc = syscalls("ON")
+    rc = bpxwunix("cat '"lfile"'",,log.,stderr.)
+    rc = syscalls("OFF")
+    if translate(lsel) = 'B' then logview = 'Browse'
+    if translate(lsel) = 'V' then logview = 'View'
+    lopt = '*'left(lsel,1)'*'
+    lsel = null
+    'tbput olog'
+    lopt = null
+    if logview = '' then logview = 'Browse'
+    if left(lfile,1) = '/' then do
+       if log.0 > 0 then
+          CALL stemview logview,'log.',,,logview "OMVS" lfile
+       if stderr.0 > 0 then
+          CALL stemview logview,'stderr.',,,logview "OMVS syslog stderr"
+       drop log. stderr.
+       end
+    else do
+         logview "dataset('"lfile"')"
+         end
+    end
+ end
+
+/* ----------------------------------- *
+ * build the table of syslog filenames *
+ * ----------------------------------- */
+Build_Table:
+/* --------------------------------- *
+ * First build the omvs file members *
+ * --------------------------------- */
+ cmd = 'ls -la' logdir
+ lsel = null
+ 'tbcreate olog names(lsel lopt ldate ltime lpar lfile)'
+  rc = bpxwunix(cmd,,stdout.,stderr.)
+  do i = 1 to stdout.0
+     parse value stdout.i with at x id gid size mm dd ltime lfile .
+     if left(lfile,1) = '.' then iterate
+     if pos('/',lfile) = 0 then iterate
+     mm = wordpos(mm,'Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec')
+     ldate = right(mm+100,2)'/'right(dd+100,2)
+     if pos(':',ltime) = 0
+        then ldate = right(ltime,2)'/'ldate
+        else ldate = left(date('o'),2)'/'ldate
+     'TBAdd olog'
+     end
+
+/* ---------------------- *
+ * Now add the z/os files *
+ * ---------------------- */
+ if loghlq /= null then do
+    call outtrap 'zf.'
+    Address TSO ,
+       'listc level('loghlq')'
+    call outtrap 'off'
+    do il = 1 to zf.0
+       if word(zf.il,1) /= 'NONVSAM' then iterate
+       parse value zf.il with x y lfile
+       parse value lfile with x'.D'date '.T'time
+       ltime = left(time,2)":"substr(time,3,2)
+       ldate = left(date,2)"/"substr(date,3,2)"/"substr(date,5,2)
+       if lparq > 0 then
+          lpar = word(translate(lfile,' ','.'),lparq)
+       'TBAdd olog'
+       end
+    end
+
+/* --------------- *
+ * Sort and return *
+ * --------------- */
+ 'TBSort olog fields(ldate,c,d,ltime,c,d)'
+ 'TBTop olog'
+ drop stdout. stderr.
+ return

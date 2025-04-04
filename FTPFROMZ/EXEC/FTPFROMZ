@@ -1,0 +1,644 @@
+        /* --------------------  rexx procedure  -------------------- */
+         ver = "1.0"
+        /* Name:      FTPFROMZ                                        *
+         *                                                            *
+         * Function:  FTP a file with member(s) from z/OS to          *
+         *            another z/OS system or other platform           *
+         *            which has an FTP Server active                  *
+         *                                                            *
+         * Syntax:    %ftpfromz options                               *
+         *                                                            *
+         *  Options may be:                                           *
+         *                                                            *
+         *     DIR                                                    *
+         *         Remote directory if none z/OS target               *
+         *                                                            *
+         *         e.g. DIR \fromz\work                               *
+         *                                                            *
+         *     DSN                                                    *
+         *         Local (source) data set name                       *
+         *         * must be a sequential data set or with            *
+         *           a single member specified                        *
+         *         * if no member specified and a PDS then the        *
+         *           MEM keyword needs to be specified                *
+         *         * May contain an * character for a wild card       *
+         *           but then must be only sequential data sets       *
+         *         * May be a generation data set with a relative     *
+         *           generation specified                             *
+         *                                                            *
+         *         e.g. DSN hlq.test.report                           *
+         *              DSN hlq.test.pds                              *
+         *              DSN hlq.test.pds(mem)                         *
+         *              DSN hlq.test.gdg(-1)                          *
+         *                                                            *
+         *     FILE                                                   *
+         *         Remote file name to be used in place of the        *
+         *         source data set name                               *
+         *         * default is to use the DSN value                  *
+         *         * if a GDG then the generation base must have      *
+         *           already been defined at the target site          *
+         *                                                            *
+         *         e.g. FILE test.report                              *
+         *                                                            *
+         *     HOST                                                   *
+         *         Remote host name to receive the FTP                *
+         *                                                            *
+         *         e.g. HOST your.local.server                        *
+         *                                                            *
+         *     MEM                                                    *
+         *         Member or (Members) of the PDS to FTP              *
+         *                                                            *
+         *         e.g. MEM member                                    *
+         *              MEM member*                                   *
+         *              MEM (mema memb memc)                          *
+         *              MEM (mema* memc*)                             *
+         *                                                            *
+         *     MEMSUF                                                 *
+         *         Defines a suffix to be appended to member names    *
+         *         (does not work with member name masking)           *
+         *                                                            *
+         *     NETRC                                                  *
+         *         FTP NETRC file with hostname, userid, and          *
+         *             password                                       *
+         *         * required if USERID and PASSWORD keywords         *
+         *           are not specified in the command                 *
+         *         * NETRC is more secure as the data set can         *
+         *           be restricted by security access rules           *
+         *         * NETRC file format is:                            *
+         *           MACHINE hostname LOGIN userid PASSWORD password  *
+         *                                                            *
+         *         e.g. NETRC data-set-name                           *
+         *                                                            *
+         *     NETRCDD                                                *
+         *         References a pre-allocated DD in the job that is   *
+         *         a NETRC file.                                      *
+         *         * NETRC file format is:                            *
+         *           MACHINE hostname LOGIN userid PASSWORD password  *
+         *                                                            *
+         *         e.g. NETRCDD ddname                                *
+         *                                                            *
+         *         ** The ddname *must* be NETRC **                   *
+         *                                                            *
+         *     NOPASSWORD                                             *
+         *         Will generate a null/blank password                *
+         *                                                            *
+         *     PASSWORD                                               *
+         *         Password for remote userid                         *
+         *                                                            *
+         *         e.g. PASSWORD xy89124                              *
+         *                                                            *
+         *         see NOPASSWORD                                     *
+         *                                                            *
+         *     POSTFTP                                                *
+         *        Defines one or more FTP commands to be executed     *
+         *        afterthe PUT of the requested file.                 *
+         *        Separate commands with a comma and enclose          *
+         *        in parenthesis if multiple or blanks.               *
+         *                                                            *
+         *        e.g POSTFTP (ls -la)                                *
+         *                                                            *
+         *     PREFTP                                                 *
+         *        Defines one or more FTP commands to be executed     *
+         *        prior to the PUT of the requested file.             *
+         *        Separate commands with a comma and enclose          *
+         *        in parenthesis if multiple or blanks.               *
+         *                                                            *
+         *        e.g PREFTP (quote site recfm=fb lrecl=80)           *
+         *                                                            *
+         *     TYPE                                                   *
+         *         Type of FTP                                        *
+         *         BIN or Binary if sending to a non z/OS host        *
+         *             in binary format                               *
+         *         TEXT or ASC if sending to a non z/OS host          *
+         *             in plain text format                           *
+         *         MVS or ZOS if sending to a z/OS host               *
+         *                                                            *
+         *         e.g. TYPE MVS                                      *
+         *                                                            *
+         *     UNIQUE                                                 *
+         *         Used if there is a mask in the DSN to force        *
+         *         unique filenames on the receiving end              *
+         *                                                            *
+         *     USERID                                                 *
+         *         Userid for remote host                             *
+         *         * if anonymous then the password is generated      *
+         *                                                            *
+         *         e.g USERID yourid                                  *
+         *                                                            *
+         * Author:    Lionel B. Dyck                                  *
+         *            Kaiser Permanente Information Technology        *
+         *            Walnut Creek, CA 94598                          *
+         *            (925) 926-5332                                  *
+         *            Internet: lionel.b.dyck@kp.org                  *
+         *                                                            *
+         * History:                                                   *
+         *            05/21/04 - 1.0 Support for GDG data sets       *
+         *                     - Other cleanup                        *
+         *            05/13/04 - 0.9 Test for required fields         *
+         *            04/30/04 - 0.8 Correction for multiple members  *
+         *            03/12/04 - 0.7 Correction for blank password    *
+         *                           thx to Philippe Septier          *
+         *            03/11/04 - 0.6 Correction for Type              *
+         *                     - Add completion message               *
+         *            03/11/04 - 0.5 Add NOPASSWORD option            *
+         *                     - Add UNIQUE option                    *
+         *                     - Add MEMSUF option                    *
+         *            03/10/04 - 0.4 Force TYPE to uppercase          *
+         *            03/08/04 - 0.3 Add SENDSITE if not z/OS         *
+         *            03/08/04 - 0.2 Changes/Enhancements             *
+         *                     - Add POSTFTP, PREFTP and DEBUG        *
+         *                     - Change keyword parse processing      *
+         *            03/05/04 - 0.1 Creation                         *
+         *                                                            *
+         * ---------------------------------------------------------- */
+
+        /* ----------------------------------- *
+         * Get the user provided input options *
+         * ----------------------------------- */
+         parse arg options
+
+        /* ----------------------------------------- *
+         * If no options then tell the user and exit *
+         * ----------------------------------------- */
+         if options = "" then do
+                              say "No parmameters entered"
+                              say "Try again...."
+                              exit 8
+                              end
+
+        /* ----------------------- *
+         * Set our default values. *
+         * ----------------------- */
+         parse value "" with dsn host userid password type dir,
+                             file null netrc mem netrcdd debug ,
+                             postftp preftp nopassword unique ,
+                             memsuf gdg
+         ftpc = 0
+
+        /* --------------------------------- *
+         * Process the user provided options *
+         * --------------------------------- */
+         Do until length(options) = 0
+            parse value options with opt options
+            work = translate(opt)
+            Select
+               When work = "DSN"        then call proc_dsn
+               When work = "DEBUG"      then debug = 1
+               When work = "HOST"       then call proc_host
+               When work = "MEM"        then call proc_mem
+               When work = "MEMSUF"     then call proc_memsuf
+               When work = "USERID"     then call proc_userid
+               When work = "PASSWORD"   then call proc_password
+               When work = "NOPASSWORD" then call proc_nopassword
+               When work = "NETRC"      then call proc_netrc
+               When work = "NETRCDD"    then call proc_netrcdd
+               When work = "POSTFTP"    then call proc_postftp
+               When work = "PREFTP"     then call proc_preftp
+               When work = "UNIQUE"     then call proc_unique
+               When work = "TYPE"       then call proc_type
+               When work = "DIR"        then call proc_dir
+               When work = "FILE"       then call proc_file
+               Otherwise do
+                         say "Invalid option specified:" opt
+                         say "Try again...."
+                         exit 8
+                         end
+               End
+         End
+
+        /* ----------------------------------- *
+         * Report on the requested FTP Options *
+         * ----------------------------------- */
+         Say " "
+         Say "FTP From zSeries (ftpfromz) version" ver "options:"
+         Say "DSN     " dsn
+         Say "HOST    " host
+         Say "MEM     " mem
+         Say "USERID  " userid
+         if nopassword <> null then
+            password = " "
+         passwordx = left("*",length(password),"*")
+         Say "PASSWORD" passwordx
+         Say "NETRC   " netrc
+         Say "NETRCDD " netrcdd
+         Say "POSTFTP " postftp
+         Say "PREFTP"   preftp
+         Say "UNIQUE"   unique
+         Say "TYPE    " type
+         Say "DIR     " dir
+         Say "FILE    " file
+
+        /* ---------------------------------------- *
+         * Now validate we have the minimum options *
+         * ---------------------------------------- */
+         if dsn  = null then call missing "DSN"
+         if host = null then call missing "Host"
+         if password <> null
+            then if userid = null then
+                 call missing "Userid"
+         if userid = null then
+            if strip(netrc netrcdd) = null then
+               call missing "Userid or Netrc or NetrcDD"
+
+        /* ------------------------------------- *
+         * Now validate the options that we have *
+         * ------------------------------------- */
+
+        /* ----------------------------------------- *
+         * If FILE is null then fill in with the DSN *
+         * ----------------------------------------- */
+         if file = null then do
+            if type <> "MVS" then do
+               if left(dsn,1) = "'"
+                  then file = substr(dsn,2,length(dsn)-2)
+                  else file = dsn
+               end
+            else file = dsn
+            end
+
+        /* -------------------------------------------- *
+         * Now generate the FTP command and allocations *
+         * -------------------------------------------- */
+
+         Say " "
+         Say "To convert this to JCL you would use the following:"
+         Say "//jobcard JOB ..."
+         Say "//FTP  EXEC PGM=FTP,PARM='"host "(EXIT"
+         Say "//SYSPRINT  DD  SYSOUT=*"
+         if netrcdd <> null then
+            Say "//NETRC DD <code as you did in this job>"
+         if netrc <> null then
+            Say "//NETRC DD DISP=OLD,DSN="netrc
+         Say "//INPUT DD *"
+
+        /* ------------------------------------ *
+         * Process Userid and Password or Netrc *
+         * ------------------------------------ */
+         if netrc <> null then do
+            "Alloc f(netrc) ds("netrc") shr reuse"
+            end
+         else if netrcdd = null then do
+              call add_cmd userid
+              call add_cmd password
+              end
+
+        /* ------------------- *
+         * Process Type option *
+         * ------------------- */
+         Select
+           When wordpos(type,"MVS ZOS") > 0  then do
+                call add_cmd "MODE B" /* Block mode */
+                call add_cmd "TYPE E" /* EBCDIC Data */
+                type = "MVS"
+                end
+           When abbrev(type,"BIN",3) then do
+                call add_cmd "SendSite"
+                call add_cmd "Binary"
+                type = "BIN"
+                end
+           When type = "ASC" then do
+                call add_cmd "SendSite"
+                call add_cmd "ASC"
+                type = "TEXT"
+                end
+           When type = "TEXT" then do
+                call add_cmd "SendSite"
+                call add_cmd "ASC"
+                type = "TEXT"
+                end
+           Otherwise
+                call add_cmd "SendSite"
+                call add_cmd "ASC"
+           End
+
+        /* --------------------------- *
+         * Process UNIQUE if specified *
+         * --------------------------- */
+         if unique <> null then
+            call add_cmd "SUnique"
+
+        /* --------------------------- *
+         * Process any PREFTP Commands *
+         * --------------------------- */
+         if preftp <> null then
+            do until length(preftp) = 0
+               parse value preftp with work","preftp
+               call add_cmd work
+               end
+
+        /* ------------------------ *
+         * Process Remote Directory *
+         * ------------------------ */
+         if dir <> null then do
+            call add_cmd "CD" dir
+            end
+
+        /* ------------------------------------ *
+         * Process DSN and FILE and perhaps MEM *
+         * ------------------------------------ */
+         if pos("*",dsn) = 0 then do
+            if gdg = 1
+            then call get_gdginfo
+            else do
+               call listdsi dsn
+               if pos("(",dsn) > 0 then do
+                  parse value dsn with dsn"("mem")" .
+                  if left(dsn,1) = "'" then dsn = dsn"'"
+                  end
+               end
+
+            Select
+            When sysdsorg = "PS" then do
+                 if pos("*",dsn) = 0 then
+                    call add_cmd "PUT" dsn file
+                 else
+                    call add_cmd "MPUT" dsn
+                 end
+
+            When sysdsorg = "PO" then do
+                 if mem = null then do
+                    say "Error. Attempting to process a PDS" ,
+                        "without specifying any members."
+                    say "Try again..."
+                    exit 8
+                    end
+                 call add_cmd "LCD" dsn
+                 if type = "MVS" then do
+                    call add_cmd "CD" file
+                    end
+                 if left(mem,1) = "(" then
+                    parse value mem with "("mem")"
+                 mem = translate(mem," ",",")
+                 Select
+                   When type = "MVS" then
+                      Select
+                        When words(mem) = 1
+                           then if mem = "*"
+                                 then do
+                                      call add_cmd "MPUT *"
+                                      end
+                            else call add_cmd "PUT" mem
+                        When words(mem) > 1
+                           then do i = 1 to words(mem)
+                           if pos("*",word(mem,i)) > 0 then
+                              call add_cmd "MPUT" word(mem,i)
+                           else do
+                                if memsuf = null then suf = null
+                                else suf = word(mem,i)""memsuf
+                                call add_cmd "PUT" word(mem,i)  suf
+                                end
+                           end
+                        end
+                   Otherwise do i = 1 to words(mem)
+                                if memsuf = null then suf = null
+                                else suf = word(mem,i)""memsuf
+                                call add_cmd "PUT" word(mem,i) suf
+                                end
+                      end
+                  end
+
+            Otherwise do
+                      say "Error Processing DSN:" dsn
+                      say "Invalid/Unsupported DSORG:" sysdsorg
+                      say "Only PS and PO are supported"
+                      say "Try again..."
+                      exit 8
+                      end
+            End
+         End
+
+        /* ---------------------------- *
+         * Process any POSTFTP Commands *
+         * ---------------------------- */
+         if postftp <> null then
+            do until length(postftp) = 0
+               parse value postftp with work","postftp
+               call add_cmd work
+               end
+
+        /* ----------------------------------------------*
+         * Now Allocate the FTP OUTPUT file for messages *
+         * and build the FTP INPUT file with the commands*
+         * ----------------------------------------------*/
+         call add_cmd "Quit"
+         Say "/*"
+         if debug = null then do
+            "Alloc f(OUTPUT) ds(*)"
+            "Alloc f(INPUT) unit(sysallda) spa(1,1) tr" ,
+               "recfm(F B) lrecl(80) blksize(0)"
+            "Execio * diskw Input (Finis stem ftp."
+            end
+         else do
+              say " "
+              say "FTPFROMZ operating in debug mode" ,
+                  "with no actual processing."
+              end
+
+        /* -------------------- *
+         * Call the FTP Program *
+         * -------------------- */
+         if debug = null then do
+            "ftp" host "(EXIT"
+            save_rc = rc
+            end
+         else do
+            save_rc = 0
+            end
+
+        /* ----------------------------- *
+         * Test for non-zero return code *
+         * ----------------------------- */
+         if save_rc > 0 then do
+            say " "
+            say "Error: the FTP did not complete successfully"
+            say "The return code is:" save_rc
+            end
+         else do
+              say " "
+              say "FTP process completed successfully."
+              say " "
+              end
+
+        /* ---------------------------- *
+         * Free any allocations we made *
+         * ---------------------------- */
+         if debug = null then
+            "Free f(Input Output)"
+         if netrc <> "" then "Free F(Netrc)"
+
+        /* ------------------------------------------------------ *
+         * We have completed processing the FTP and now return to *
+         * our sponsor.                                           *
+         * ------------------------------------------------------ */
+         Exit save_rc
+
+        /* -------------------------------------- *
+         * Add FTP Command to stem for processing *
+         * -------------------------------------- */
+         Add_Cmd:
+         parse arg cmd
+         ftpc     = ftpc + 1
+         ftp.ftpc = cmd
+         if cmd <> password then
+            Say cmd
+            else do
+                 say left("*",length(password),"*") ,
+                     "<=== replace with valid password"
+                 end
+         return
+
+        /* ----------------------------------------- *
+         * Called Subroutines to Process each option *
+         * ----------------------------------------- */
+         Proc_dsn:
+            parse value options with dsn options
+            if pos("(",dsn) > 0 then do
+               parse value dsn with ."("gdgidx")".
+               if datatype(gdgidx) = num then do
+                  gdg = 1
+                  return
+                  end
+               end
+            if "OK" <> sysdsn(dsn) then do
+               say "Error with DSN:" dsn ,
+                   sysdsn(dsn)
+               say "Try again..."
+               if debug <> null then return
+               exit 8
+               end
+            return
+
+         Proc_Host:
+            parse value options with host options
+            return
+
+         Proc_Mem:
+            parse value options with mem options
+            if left(mem,1) <> "(" then return
+            if left(mem,1) = "(" then
+               if right(mem,1) = ")" then
+                  return
+             parse value options with memr")" options
+             parse value mem with "("mem
+             mem = mem memr
+            return
+
+         Proc_MemSuf:
+            parse value options with memsuf options
+            return
+
+         Proc_Netrc:
+            parse value options with netrc options
+            if "OK" <> sysdsn(netrc) then do
+               say "Error with NETRC:" netrc ,
+                   sysdsn(netrc)
+               say "Try again..."
+               exit 8
+               end
+            return
+
+         Proc_NetrcDD:
+            parse value options with netrcdd options
+            if translate(netrcdd) <> "NETRC" then do
+               Say "Error with NETRCDD ddname of" netrcdd
+               Say "The only allowed ddname is NETRC."
+               Say "Try again..."
+               exit 8
+               end
+            return
+
+         Proc_POSTFTP:
+            parse value options with postftp options
+            if left(postftp,1) <> "(" then return
+            if left(postftp,1) = "(" then
+               if right(postftp,1) = ")" then
+                  return
+             parse value options with postftpr")" options
+             parse value postftp with "("postftp
+             postftp = postftp postftpr
+            return
+
+         Proc_PREFTP:
+            parse value options with preftp options
+            if left(preftp,1) <> "(" then return
+            if left(preftp,1) = "(" then
+               if right(preftp,1) = ")" then
+                  return
+             parse value options with preftpr")" options
+             parse value preftp with "("preftp
+             preftp = preftp preftpr
+            return
+
+         Proc_Userid:
+            parse value options with userid options
+            if userid = "anonymous" then
+               password = sysvar('sysuid')"@"sysvar('sysnode')
+            return
+
+         Proc_NoPassword:
+            nopassword = 1
+            return
+
+         Proc_Password:
+            parse value options with password options
+            return
+
+         Proc_Type:
+            parse value options with type options
+            type = translate(type)
+            return
+
+         Proc_Dir:
+            parse value options with dir options
+            return
+
+         Proc_File:
+            parse value options with file options
+            return
+
+         Proc_Unique
+            unique = "On"
+            return
+
+        /* ------------------------------ *
+         * report out missing information *
+         * ------------------------------ */
+         Missing:  parse arg missed
+         Say " "
+         Say "Error - Missing keyword for" missed
+         Say " "
+         Say "FTPFromZ is terminating. Try again."
+         Exit 8
+
+        /* ------------------------- *
+         * Get Data Set info for GDG *
+         * ------------------------- */
+         Get_gdginfo:
+         gdgdsn = word(translate(dsn," ","'("),1)
+         call outtrap "listc."
+         "Listc level("gdgdsn")"
+         call outtrap "off"
+         base = 0
+         do i = 1 to listc.0
+            if word(listc.i,1) <> "NONVSAM" then iterate
+            base = base + 1
+            gdg.base = word(listc.i,3)
+            end
+         if pos(left(gdgidx,1),"-+") > 0 then
+            gdgidx = substr(gdgidx,2)
+         gdgidx = gdgidx + 1
+         if gdgidx > base then do
+            say "Error with DSN" dsn
+            say "      The generation does not exist."
+            say "      Exiting.... try again."
+            Exit 8
+            end
+         gdgdsn = gdg.gdgidx
+         if sysdsn(gdgdsn) <> "OK" then do
+            say "Error with DSN" dsn
+            say sysdsn(gdgdsn)
+            say "Exiting.... try again."
+            Exit 8
+            end
+         call listdsi "'"gdgdsn"'"
+         return

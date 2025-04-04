@@ -1,0 +1,47 @@
+)Attr Default(%+_)
+/* + type(text  ) intens(low )                   information only  */
+/* _ type( input) intens(high) caps(on ) just(left )               */
+   _ type(INPUT)  intens(HIGH) caps(ON)    color(RED) hilite(USCORE)
+   @ type(INPUT)  intens(HIGH) caps(ON)    just(LEFT)
+   $ type(INPUT)  intens(HIGH) caps(OFF)   just(LEFT) pad('_')
+   ` type(INPUT)  intens(NON)  caps(OFF)   just(LEFT)
+   % type(TEXT)   intens(HIGH)
+   ~ type(TEXT)   intens(HIGH) color(BLUE) hilite(reverse)
+   # type(OUTPUT) intens(HIGH) color(BLUE) just(RIGHT)
+)Body Expand(\\)
++\-\~UNPack Dataset Dialog+\-\
+%Command ===>@ZCMD                                                             +
++
++This dialog invokes the IBM utility TRSMAIN which will unTerse or UNpack a
++dataset after it has been received in a Tersed or Packed format.
++
++
++Packed Dataset%===>_INDS                                        +
++
++Output Dataset%===>_OUTDS                                       +
++
++Original Dataset Allocation Attributes:
++
++  Dataset Organisation%._A +      (PS or PO)
++  Directory Blocks%....._DIR+     (Zero if PS)
++  Record Format%........_RFM+
++  Record Length%........_LRECL+
++  Block Size%..........._BLKSZ+
++  Primary Tracks%......._PTRKS  +
++  Secondary Tracks%....._STRKS  +
++
++All attributes are optional%except+if original dataset was a PDS then
++Dataset Organisation%MUST+be specified (Directory Blocks%should+be specified).
+)Init
+ .cursor = &CURPOS
+)Proc
+ &ZCMD = trunc(&ZCMD,'')
+ if (&ZCMD = 'CAN','CANCEL','END','EXIT','RETURN')
+    .resp = END
+ else
+    ver (&INDS,NB)
+    ver (&OUTDS,NB)
+    &DSORG   = &A
+    &RECFM   = &RFM
+    &BLKSIZE = &BLKSZ
+)End

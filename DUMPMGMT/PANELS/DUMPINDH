@@ -1,0 +1,52 @@
+)Panel Keylist(ISPHelp,ISP)
+)Attr Default(%`_)
+/* _ type( input) intens(high) caps(on ) just(left )               */
+   @ type( input) intens(high) caps(on ) just(left ) pad('_') color(turq)
+   ! type(output) intens(high) caps(off) just(asis ) color(white)
+   ~ type(text) intens(high) caps(off) just(asis ) color(turq)
+   % type(text) intens(high)
+   # area(SCRL) Extend(ON)
+)Body  Expand(//)
+%-/-/- ~System Dump Directory% -/-/-
+%Command ===>_zcmd                                        / /%Scroll ===>_amt +
+%
+`                                                                %Up F10 Dn F11
+#help -------------------------------------------------------------------------#
+)Area Help
+`  This ISPF Dialog provides a simple table driven interface to manage the
+`  'flood' of system generated dumps.
+`
+` The available command line options are:
+`
+`   F      +Find a dump using any character string
+`          +e.g find xyz
+`
+`   Edit   +Edit the system DUMPLOG dataset (not recommended but available)
+`
+`   Cancel +Same as entering PF3 to end the dialog
+`
+`   IPCS   +to directly enter IPCS
+`
+`   Bottom +move the table display to the bottom of the table
+`
+`   Top    +move the table display to the top of the table
+`
+` The available selection options are:
+`
+`   S      +Select the dump and invoke IPCS to process it
+`
+`   D      +Delete the dump which removes it from the table and
+`          +deletes the dataset
+`
+`   F      +Flag the dump for ownership.  This prevents the dump from
+           +being deleted by the daily dump cleanup process.
+`
+`   T      +Terse (compress using TRSMAIN) the dump so that it will
+           +be smaller and easier to send to IBM or other vendor.
+           +Optionally invoke the FTPB ISPF dialog to FTP the dump
+           +to IBM or that other vendor.
+` ~
+)Init
+  .cursor = zcmd
+)Proc
+)end

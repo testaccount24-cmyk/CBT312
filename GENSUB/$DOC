@@ -1,0 +1,33 @@
+GENSUB - A Generalized ISPF Job Submission Dialog
+
+This application is a generalized REXX application intended to standardize
+and simplify the submission of jobs from within an ISPF application. To
+use it the ISPF dialog developer inserts into a CLIST or REXX application
+the call to the GENSUB application after generating the Batch JCL to be
+submitted.
+Syntax:  %gensub jcl-dsn
+
+The user will then be presented with 4 options:
+
+     B - Browse the generated JCL
+     E - Edit the generated JCL
+     S - Submit the generated JCL
+     C - Cancel the GENSUB process
+
+To install this application execute the RECEIVE member of this installation
+partition data set:
+
+     EX install.pds(receive)
+
+Then follow the prompts to restore the EXEC and PANELS members, which are
+in TSO Transmit format, into real data sets.  Then copy these data sets
+into libraries in your ISPF TSO library concatenation.
+
+Questions, comments, or suggestions may be sent to the author:
+
+Author:    Lionel B. Dyck
+           Kaiser Permanente Information Technology
+           25 N. Via Monte Ave.
+           Walnut Creek, CA 94598
+           (925) 926-5332
+           Internet: lionel.b.dyck@kp.org                     *

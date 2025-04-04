@@ -1,0 +1,32 @@
+)ATTR DEFAULT(%$_)
+   %   TYPE(TEXT)  INTENS(HIGH) SKIP(ON)
+   $   TYPE(TEXT)  INTENS(LOW)  SKIP(ON) COLOR(GREEN)
+   _   TYPE(INPUT) INTENS(HIGH) CAPS(ON) JUST(LEFT) HILITE(USCORE)
+)BODY EXPAND(\\)
+%Tutorial$-\-\-(%RUNC - Edit Macro$)-\-\-%Tutorial
+%Command ===>_ZCMD
+$
+%<START>$and%<END>>$Statements
+$
+%    <START>
+$    command 1
+$    command 2
+%    <END>
+$
+$ 1.%<START>$and%</END>$must be the only text on the statements
+$ 2. Any valid RUNC supported command may be between these statements
+$ 3. Use of this over-rides RUNC -ALL and range selections (e.g. S# or SS/SS)
+$    unless the%<START>$is the last statement in the range.
+$
+$
+$
+$
+$
+$
+$
+$
+$ \ \ (press%ENTER$to continue) \ \
+)PROC
+  &ZUP     = #RUNC2A
+  &ZCONT   = #RUNC3B
+)END

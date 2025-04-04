@@ -1,0 +1,206 @@
+        /* --------------------  rexx procedure  -------------------- *
+         * Name:      CAVXTRTD                                        *
+         *                                                            *
+         * Function:  Defaults/Local Customizations for CAVXTRT       *
+         *                                                            *
+         * Syntax:    called by CAVXTRT                               *
+         *                                                            *
+         * Author:    Lionel B. Dyck                                  *
+         *            Kaiser Permanente Information Technology        *
+         *            Walnut Creek, CA 94598                          *
+         *            (925) 926-5332                                  *
+         *            Internet: lionel.b.dyck@kp.org                  *
+         *                                                            *
+         * Dependencies: some knowledge of REXX coding.               *
+         *                                                            *
+         * History:                                                   *
+         *            02/11/04 - Updated the panel/table ca lib       *
+         *                       data set names with plex name        *
+         *            07/10/03 - Remove SAR.RM from PROD              *
+         *            06/16/03 - Change jobclass for nkaiser2         *
+         *            06/13/03 - Add Sar.Sartest to d/b list          *
+         *            06/06/03 - Add JOBCard                          *
+         *            06/04/03 - Add Routine to Determine Admin Priv  *
+         *            08/28/02 - Changed SARCICS to historical        *
+         *            02/25/02 - Creation                             *
+         *                                                            *
+         * ---------------------------------------------------------- */
+
+         parse value "" with null jobclass jobcard panels tables
+
+        /* -------------------------------------------------- *
+         * Setup the date format desired and which is used by *
+         * the ca-view generated report                       *
+         *                                                    *
+         *    U = mm/dd/yy  (USA)                             *
+         *    E = dd/mm/yy  (European)                        *
+         * -------------------------------------------------- */
+         datefmt = "U"
+
+        /* ---------------------------------------------------- *
+         * Construct JOB Card Accounting                        *
+         *                                                      *
+         * The account code is extracted from the ISPF Variable *
+         * zacctnum and then parsed to insert into the JOB Card *
+         * accounting field.                                    *
+         *                                                      *
+         * If / found then parse and rebuild with ,             *
+         * ---------------------------------------------------- */
+         Address ISPExec ,
+            "Vget (zacctnum jobclass)"
+         if pos("/",zacctnum) > 0 then do
+            parse value zacctnum with a "/" b "/" c
+            acct = strip(a)","strip(b)",D"
+            end
+         else acct = zacctnum
+
+        /* ---------------------------------------- *
+         * Define Job Suffix for generated Job Card *
+         * ---------------------------------------- */
+         jobsuf = "L"
+
+        /* ---------------------------------------------------- *
+         * Define the first JOB Card statement. This is for the *
+         * basic information. The Class is on another statement *
+         * created in CAVXTRT.                                  *
+         * ---------------------------------------------------- */
+         jobname = sysvar(sysuid)""jobsuf
+         jobcard = "//"left(jobname,8) "JOB '"acct"','CA-View Extract',"
+
+        /* ----------------------------------------------------------- *
+         * To customize this remove all the Select/When/Otherwise/End  *
+         * sections and insert your own.  If you have only a single    *
+         * node (no NJE) then you can just setup the CA-View database  *
+         * and description variables.                                  *
+         *                                                             *
+         * If you are not using the NJE Node for testing then the      *
+         * node = sysvar('sysnode') is not needed.                     *
+         *                                                             *
+         * The format of the variable is:                              *
+         *                                                             *
+         * T.1 = "hlq.database sample test database"                   *
+         * T.2 = "hlq.databas2 sample test database 2"                 *
+         * t.0 = 2                                                     *
+         *                                                             *
+         * T.# (where # is from 1 to n incremented by 1)               *
+         * "database-dsn database description"                         *
+         *                                                             *
+         * The database-dsn is the hlq for the database, not the full  *
+         * dataset name for the database.  It is what you use in the   *
+         * /DBASE control card for SARBCH.                             *
+         *                                                             *
+         * The database description is a short description and blanks  *
+         * are allowed.                                                *
+         *                                                             *
+         * The database-dsn and database description MUST be enclosed  *
+         * within the same set of quotes (single ' or double ")        *
+         *                                                             *
+         * T.0 = number of databases                                   *
+         *                                                             *
+         * This example demonstrates how to setup this code to work    *
+         * on multiple nodes.                                          *
+         *                                                             *
+         * First get the active JES Node name (sysnode)                *
+         *                                                             *
+         * Then use the Select/When/Otherwise to test for each node    *
+         * and setup the databases appropriate to each node. Also      *
+         * set the jobclass for each node.                             *
+         * ----------------------------------------------------------- */
+
+         node = sysvar('sysnode')
+
+        /* ------------------------------------------------ *
+         * Start of Kaiser Specific Database Specifications *
+         * ------------------------------------------------ */
+         Select
+           When node = "HAWJES2" then do
+                t.1 =  "HI.SAR.DB01 CA-View (SAR)"
+                t.2 =  "HI.SAR.TEST.DB01 CA-View (SAR) Test Database"
+                t.0 = 2
+                end
+           When node = "NKAISERA" then do
+                jobclass = "A"
+                t.1 =  "SAR.SARPROD1 General Production"
+                t.2 =  "SAR.SARPROD2 Oversize Reports"
+                t.3 =  "SAR.SARPROD3 Production JCL & Messages"
+                t.4 =  "SAR.SARCICS CICS Compiles (historical)"
+                t.5 =  "SAR.SARUSER SAR User"
+                t.6 =  "SAR.SARSYSTM SAR System"
+                t.0 = 6
+                end
+           When node = "NKAISER2" then do
+                jobclass = "V"
+                t.1 =  "SAR.SARTEST CA-View Testing"
+                t.0 = 1
+                end
+           When node = "SKAISERB" then do
+                t.1 = "SAR.CENTEAST Central East Region + Ohio & MidAtlantic"
+                t.2 = "SAR.RM.TST Rocky Mountain"
+                t.3 = "SAR.SYSH Brooklyn Heights"
+                t.4 = "SYSL.SAR.TST Southern California"
+                t.5 = "SYSL.SAR.IRCS Q/Care, CMIS, IVIS, MM Common Systems"
+                t.6 = "SYSL.SAR.CNG Change Control"
+                t.7 = "SYSL.SAR.NW Northwest Region"
+                t.8 = "SAR.SARUSER NCAL Development Reports"
+                t.9 = "SAR.SARCICS NCAL CICS Development Reports"
+                t.10 = "SYSL.SAR.MVS MSS Group Test D/B"
+                t.0 = 10
+                end
+           When node = "SKAISERC" then do
+                jobclass = "V"
+                t.1 = "SAR.BH Ohio Historical Job Output Messages"
+                t.2 = "SAR.CENTEAST Central East Region + Ohio & MidAtlantic"
+                t.3 = "SAR.CIC CICS Dumps"
+                t.4 = "SAR.IRCP Southwest Region and Common Service Center"
+                t.5 = "SAR.IRCS KPIT Finance Division"
+                t.6 = "SAR.JCL Job Output Messages for All Regions"
+                t.7 = "SAR.NW Northwest Region"
+                t.8 = "SAR.RM.JCL Rocky Mountain JCL"
+                t.9  = "SAR.RM.RPTS Rocky Mountain Reports"
+                t.10 = "SAR.RPT Southern California Region"
+                t.0 = 10
+                end
+             Otherwise t.0 = 0
+             end
+        /* -------------------------------- *
+         * End of Kaiser Specific Databases *
+         * -------------------------------- */
+
+        /* ----------------------------------------------------------- *
+         * Define the Computer Associates CA-View ISPF Panel and Table *
+         * dataset names.  This is only required if these libraries    *
+         * are not in your standard TSO/ISPF allocations, if they are  *
+         * then set these variables to null.                           *
+         * ----------------------------------------------------------- */
+         env    = mvsvar("SYMDEF","KSYSENV")
+         panels = "'sysl.view."env".caiispp'"
+         tables = "'sysl.view."env".caiispt'"
+
+        /* ----------------------------------------------- *
+         * Determine if the current user is authorized for *
+         * Administrative Priviledges.                     *
+         *                                                 *
+         * For RACF extract the Default-Group and compare. *
+         *    - Return ADMIN OK if authorized              *
+         *      otherwise nothing                          *
+         * ----------------------------------------------- */
+         call outtrap "admin."
+         "LU" sysvar('sysuid')
+         call outtrap "off"
+         parse value admin.2 with "DEFAULT-GROUP="group .
+         admin_groups = "SDSMVS SYSSCP01"
+         if wordpos(group,admin_groups) > 0 then
+            Queue "ADMIN OK"
+
+        /* ---------------------------------------- *
+         * Now queue the information out to CAVXTRT *
+         * ---------------------------------------- */
+         Queue "JOBCARD" jobcard
+         Queue "JOBCLASS" jobclass
+         Queue "DATEFMT" datefmt
+         Queue "PANELS" panels
+         Queue "TABLES" tables
+         if t.0 = 0 then QUEUE "DB none"
+         else do i = 1 to t.0
+              Queue "DB" t.i
+              end

@@ -1,0 +1,159 @@
+)Attr Default(%+_)
+   ` type(text) intens(high) color(blue)
+   ~ type(text) intens(high) color(turq  ) hilite(reverse)
+   @ type(output) intens(high) color(turq  ) hilite(reverse)
+   # type(input) intens(high) caps(on) hilite(uscore)
+   _ type(input) caps(off) just(left) hilite(uscore)
+   + type(text) skip(off) intens(low)
+)Body  Expand(\\)
+%\-\-~DSFS dsadm Createparm@ver%-\-\
+%Option ===>_zcmd
+%
++Using HLQ of#hlq                          +
++
++Type:     #z+bin or#z+rec or#z+txt
++
++DSORG:    #z+Partitioned or#z+Sequential
++RECFM:    #z+FB or#z+VB
++LRECL:    #lrecl+
++BLKSIZE:  #blksz+
++Space:    #z+Trks or#z+Cyl
++Primary:  #z   +and Secondary#z   +
++DataClass:#datac   +  MgmtClass:#mgmtc   +  StorClass:#storc   +
++
++Notes:  1. The HLQ must start with the active users User ID and
++           there must be at least one dataset under the HLQ
++        2. For BLKSIZE a value of 0 will use the system determined blksize
++        3. If RECFM is FB and BLKSIZE is not 0, then it must be a multiple
++           of the LRECL
+)Init
+  .cursor = zcmd
+  .zvars = '(bin rec txt po ps fb vb trk cyl prim sec)'
+  .help = dsfstutr
+*rexx(* hlq)
+   if hlq = '' then
+      hlq = sysvar('sysuid')
+*endrexx
+)Proc
+ &resp = .resp
+*rexx(* resp msg csr)
+  parse value '' with msg csr null
+  if pos('.',hlq) > 0
+     then parse value hlq with testhlq'.' .
+     else testhlq = hlq
+  if testhlq /= sysvar('sysuid') then do
+     msg = 'The HLQ must be the same as th active users USERID - try again.'
+     csr = 'hlq'
+     end
+  if msg = null then do
+     call outtrap 'x.'
+     'listc level('hlq')'
+     call outtrap 'off'
+     if pos('NOT FOUND',x.1) > 0 then do
+        msg = 'At least one dataset must be allocated using the provided',
+              'HLQ.'
+        csr = 'hlq'
+     end
+     end
+  if msg = null then
+  if words(bin rec txt) = 0 then do
+     msg = 'You must select one type for the createparm option - try again.'
+     csr = 'bin'
+     end
+  if msg = null then
+  if words(bin rec txt) > 1 then do
+     msg = 'Only one type may be selected at a time - try again.'
+     csr = 'bin'
+     end
+  if msg = null then
+  if words(po ps) = 0 then do
+     msg = 'You must select one dataset organization - try again.'
+     csr = 'po'
+     end
+  if msg = null then
+  if words(po ps) > 1 then do
+     msg = 'You may select only one dataset organization - try again.'
+     csr = 'po'
+     end
+  if msg = null then
+  if words(fb vb) = 0 then do
+     msg = 'You must select one record format - try again.'
+     csr = 'fb'
+     end
+  if msg = null then
+  if words(fb vb) > 1 then do
+     msg = 'You may only select one record format - try again.'
+     csr = 'fb'
+     end
+  if msg = null then
+  if lrecl = null then do
+     msg = 'You must specify a logical record length.'
+     csr = 'lrecl'
+     end
+  else if datatype(lrecl) /= 'NUM' then do
+     msg = 'The logical record length must be numeric.'
+     csr = 'lrecl'
+     end
+  else if lrecl > 32767 then do
+     msg = 'The logical record length must not exceed 32767.'
+     csr = 'lrecl'
+     end
+  if msg = null then
+  if blksz = null then do
+     msg = 'You must specify a BLKSIZE.'
+     csr = 'blksz'
+     end
+  else if datatype(blksz) /= 'NUM' then do
+     msg = 'The BLKSIZE length must be numeric.'
+     csr = 'blksz'
+     end
+  else if blksz > 32767 then do
+     msg = 'The BLKSIZE length must not exceed 32767.'
+     csr = 'blksz'
+     end
+  if msg = null then
+     if fb /= null then
+        if blksz /= 0 then
+        if blksz//lrecl /= 0 then do
+     msg = 'The BLKSIZE length must be a multiple of the LRECL for' ,
+           'RECFM=FB.'
+     csr = 'blksz'
+     end
+  if msg = null then
+     if words(trk cyl) = 0 then do
+     msg = 'You must specify a Space Unit of Track or Cylinder.'
+     csr = 'trk'
+     end
+  if msg = null then
+     if words(trk cyl) > 1 then do
+     msg = 'You must specify a single Space Unit of Track or Cylinder.'
+     csr = 'trk'
+     end
+  if msg = null then
+     if datatype(prim) /= 'NUM' then do
+     msg = 'The Primary space allocation must be numeric.'
+     csr = 'prim'
+     end
+  if msg = null then
+     if sec /= null then do
+        if datatype(sec) /= 'NUM' then do
+        msg = 'The Secondary space allocation must be numeric.'
+        csr = 'sec'
+        end
+     end
+     else sec = prim
+*endrexx
+ if (&msg NE &Z)
+     &zerrhm   = 'dsfstutr'
+     &zerralrm = 'NO'
+     &zerrtp   = 'Notify'
+     &zerrsm  = &Z
+     &zerrlm  = &msg
+     .cursor = &csr
+     .MSG = ISRZ002
+ if (&msg EQ &Z)
+     ver (&hlq,dsname)
+     ver (&datac,name)
+     ver (&mgmtc,name)
+     ver (&storc,name)
+)End

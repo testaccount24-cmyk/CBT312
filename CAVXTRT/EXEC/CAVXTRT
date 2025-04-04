@@ -1,0 +1,1518 @@
+        /* --------------------  rexx procedure  -------------------- */
+        ver = "1.27"
+        /* Name:      CAVXTRT                                         *
+         *                                                            *
+         * Function:  Display reports from CA-View and allow user to: *
+         *            - Extract to a dataset                          *
+         *            - Extract for mailing (via xmitip)              *
+         *            - Extract for viewing or browsing               *
+         *            - Delete a report from disk (not the d/b)       *
+         *            - Print a report                                *
+         *            - Transfer a report to workstation              *
+         *            - Load the report for processing                *
+         *                                                            *
+         *            - display statistics for the selected db        *
+         *                                                            *
+         * Syntax:    %cavxtrt option(s)                              *
+         *                                                            *
+         *            Valid Options:                                  *
+         *            database - invoke using this specified          *
+         *                       CA-View database                     *
+         *            /CA     - Invoke the Computer Associates        *
+         *                      CA-View ISPF Interface for all        *
+         *                      selections.                           *
+         *            /LAST   - Use the last CA-View Database         *
+         *                      and bypass the database prompt        *
+         *                                                            *
+         * Customization: see CAVXTRTD for local customizations       *
+         *                                                            *
+         * Dependencies:                                              *
+         *    1. SARBCH must be in the Linklist                       *
+         *    2. SYS1.PARMLIB(IKJTSOxx) must have SARBCH in the       *
+         *       AUTHPGM section                                      *
+         *    3. The list of CA-View databases and descriptions at    *
+         *       the end of this code must be updated using the       *
+         *       NJE Nodename to identify which databasea are         *
+         *       available.                                           *
+         *    4. The LIBDEF's in the DO_CADialog must be updated      *
+         *       for the CA-View Panel and Table Libraries.           *
+         *    5. External routine CAVXTRTD accessed for many local    *
+         *       customization settings.                              *
+         *                                                            *
+         * Notes:                                                     *
+         *   1. if the user enters a command other than L (load) and  *
+         *      the report is not on disk then a LOAD will be         *
+         *      implied and the user informed to wait for the batch   *
+         *      load to complete.                                     *
+         *   2. If there is only one database then the database       *
+         *      selection display will be bypassed.                   *
+         *                                                            *
+         * History:                                                   *
+         *      01/23/19 - Version 1.27                               *
+         *               - Update from Anthony Cieri to handle        *
+         *                 CA-View 14.x                               *
+         *      03/24/10 - Version 1.26                               *
+         *               - Update from Lane Thorne to handle          *
+         *                 CA-View 11.x                               *
+         *      12/04/07 - Version 1.25                               *
+         *               - Make code more dynamic for /LIST           *
+         *      05/14/07 - Version 1.24                               *
+         *               - Update to work with R11 of CA-View         *
+         *                 (thx to Andy White)                        *
+         *               - For R11 changed Reports to 133 lrecl       *
+         *               - Changed Blksize to system determined (0)   *
+         *               - Change parsing of records and offsets      *
+         *      07/27/05 - Version 1.23                               *
+         *               - Fine tune location of dloc and prtlines    *
+         *               - Change space allocation for work file to   *
+         *                 use secondary size                         *
+         *      05/05/04 - Version 1.22                               *
+         *               - Enable use in multiple ISPF sessions       *
+         *      09/09/03 - Version 1.21                               *
+         *               - Change space allocation for DD CAVXTRT     *
+         *                 to reduce the primary and increase the     *
+         *                 secondary.  Also add Unit Count (UCOUNT)   *
+         *                 to the allocation to help ensure that      *
+         *                 space will be found for large files,       *
+         *                 only if the primary is > 1000 tracks       *
+         *      07/08/03 - Version 1.20                               *
+         *               - Correct JOBCard for Reorg message          *
+         *      06/17/03 - Version 1.19                               *
+         *               - If Admin and only 1 data base still display*
+         *                 the data base selection list to allow the  *
+         *                 R, V, and VF selections.                   *
+         *               - Support sort sequence (e.g. sort field,x   *
+         *                 where x is A (ascend) or D (descend)       *
+         *               - New Administration setup (see CAVXTRTD)    *
+         *               - on d/b table list improve redisplay        *
+         *               - Build Jobcard in CAVXTRTD                  *
+         *               - Add Data base selection R to submit a      *
+         *                 batch JOB to REORG the data base - ASYNCH  *
+         *               - Make d/b selection V Status and add VF for *
+         *                 STATUS FULL                                *
+         *               - Add report selection option of DD to delete*
+         *                 the online copy of the report              *
+         *               - Use Admin to validate use of               *
+         *                 - Data base selection R                    *
+         *      06/02/03 - Version 1.18                               *
+         *               - Add V (verify) option on the data base     *
+         *                 list to display data base stats            *
+         *      01/08/03 - Version 1.17                               *
+         *               - Fix REFRESH (was failing on 2nd use)       *
+         *      01/06/03 - Version 1.16                               *
+         *               - Fix sort for ARCHDATE to correct sort order*
+         *      11/21/02 - Version 1.15                               *
+         *               - Allow Todate of TODAY                      *
+         *      10/29/02 - Version 1.14                               *
+         *               - Add TIME to job card                       *
+         *      09/30/02 - Version 1.13                               *
+         *               - Allow sorting of columns                   *
+         *      06/18/02 - Version 1.12                               *
+         *               - delete work datasets when complete for     *
+         *                 all returns                                *
+         *      03/11/02 - Version 1.11                               *
+         *               - set suffix for temp d/s to .CAV            *
+         *               - fix if user prefix is null                 *
+         *               - translate database dsns to upper case      *
+         *      02/28/02 - Version 1.10                               *
+         *               - fix jobclass on 2nd + submits              *
+         *               - Fix to delete temp datasets before alloc   *
+         *      02/28/02 - Version 1.9                                *
+         *               - change to browse SARBCH results if rc>0    *
+         *      02/26/02 - Version 1.8                                *
+         *               - change from /PRINT to /LOAD which avoids   *
+         *                 the banner pages in the report.            *
+         *      02/26/02 - Version 1.7                                *
+         *               - fix missing end statement in extract       *
+         *               - add display save/restore in mail           *
+         *      02/25/02 - Version 1.6                                *
+         *               - Move a lot of the customizations to the    *
+         *                 CAVXTRTD external rexx routine.            *
+         *               - Test validity of user specified database   *
+         *               - If last action is L then don't redo it     *
+         *               - Save jobclass for last database to use if  *
+         *                 /LAST is requested                         *
+         *      02/25/02 - Version 1.5                                *
+         *               - Correct extract dsn when prefix <> userid  *
+         *      02/24/02 - Version 1.4                                *
+         *               - Sort database list table by description    *
+         *               - Add /LAST Option                           *
+         *               - Change CA option to /CA                    *
+         *               - Allow a CA-View database to be specified   *
+         *                 as the first option                        *
+         *               - Make patience window a popup               *
+         *      02/23/02 - Version 1.3                                *
+         *               - fix file transfer                          *
+         *      02/22/02 - Version 1.2                                *
+         *               - add support for generic REPORT-ID selection*
+         *               - add new File Transfer selection option     *
+         *      02/21/02 - Version 1.1                                *
+         *               - add date format option for international   *
+         *                 formats                                    *
+         *      02/19/02 - Version 1.0                                *
+         *       ....    - numerous enhancements/changes              *
+         *      02/11/02 - Creation                                   *
+         *                                                            *
+         * ---------------------------------------------------------- *
+         * Author:    Lionel B. Dyck                                  *
+         *            Kaiser Permanente Information Technology        *
+         *            Walnut Creek, CA 94598                          *
+         *            (925) 926-5332                                  *
+         *            Internet: lionel.b.dyck@kp.org                  *
+         *            AIM nickname: lbdyck                            *
+         * ---------------------------------------------------------- */
+         arg options
+
+        /* -------------------------------------------------- *
+         * Test for our ISPF Applid and if not then:          *
+         * - create an ISPF Commands Table so we can change   *
+         *   RFIND to PASSTHRU so we can process it           *
+         * - re-invoke ourselves with our APPLID              *
+         * - upon return end the ISPF Commands Table and exit *
+         * -------------------------------------------------- */
+         Address ISPExec
+         "Vget (Zapplid)"
+         "Control Errors Return"
+         if zapplid <> "CAVX" then do
+             "TBCreate cavxcmds names(zctverb zcttrunc zctact zctdesc)",
+               "replace share nowrite"
+             zctverb = "RFIND"
+             zcttrunc = 0
+             zctact = "&CAVXFIND"
+             zctdesc = "RFIND for CAView Dialog"
+             "TBAdd cavxcmds"
+             "Select CMD(%"sysvar('sysicmd') options ") Newappl(CAVX)" ,
+                 "Passlib SCRName(CAVXTRT)"
+             "TBEnd cavxcmds"
+            Address TSO
+            exit 0
+            end
+
+        /* ------------------------------------------------------ *
+         * Setup the Global variables that will be used elsewhere *
+         * in this code.                                          *
+         * - turn messages off                                    *
+         * - set the table name for the list of reports           *
+         * - set several variables to "" (null)                   *
+         * - set the name of the /LIST work dataset               *
+         * ------------------------------------------------------ */
+         call msg "Off"
+         table_name = cavlist
+         parse value "" with null refresh first_pass rptmask ,
+                             lastdb slash_last userdb final
+         tu = random(9999)
+         if sysvar('syspref') <> sysvar('sysuid') then do
+            tmp_dsn = sysvar('sysuid')".CAVXTRT.TEMP"tu".LIST"
+            prt_dsn = sysvar('sysuid')".CAVXTRT.TEMP"tu".LISTS"
+            end
+         else do
+            tmp_dsn = "CAVXTRT.TEMP"tu".LIST"
+            prt_dsn = "CAVXTRT.TEMP"tu".LISTS"
+            end
+         Address TSO
+         "Delete" tmp_dsn
+         "Delete" prt_dsn
+         Address ISPExec
+         zerralrm = "NO"
+         zerrhm   = "CAVXTRTH"
+
+        /* ----------------------------------------------------- *
+         * Call the CAVXTRTD external rexx routine for the local *
+         * customization settings.                               *
+         * ----------------------------------------------------- */
+         call cavxtrtd
+         c = queued()
+         do i = 1 to c
+            parse pull in
+            in.i = in
+            end
+         in.0 = c
+         db   = 0
+         drop tab.
+         parse value "" with datefmt jobclass jobcard ,
+                             panels tables admin
+         do i = 1 to in.0
+            test = word(in.i,1)
+            Select
+              When test = "ADMIN" then
+                   admin = word(in.i,2)
+              When test = "DATEFMT" then
+                   datefmt = word(in.i,2)
+              When test = "DB" then do
+                   parse var in.i x dbase desc
+                   db = db + 1
+                   tab.db = dbase desc
+                   end
+              When test = "JOBCLASS" then
+                   jobclass = word(in.i,2)
+              When test = "JOBCARD" then
+                   jobcard = subword(in.i,2)
+              When test = "PANELS" then
+                   panels = word(in.i,2)
+              When test = "TABLES" then
+                   tables = word(in.i,2)
+              Otherwise nop
+              end
+            end
+            tab.0 = db
+
+        /* ---------------------------------------------- *
+         * Test for options and set variables.            *
+         *    /CA - Invoke the Computer Associates Dialog *
+         *    /LAST - Use the last used database          *
+         * ---------------------------------------------- */
+         if options <> null then do
+            if left(word(options,1),1) <> "/" then do
+               slash_last = 1
+               userdb     = 1
+               cavdb  = word(options,1)
+               testdb = "'"cavdb".SARDBASE.D0000001'"
+               if sysdsn(testdb) <> "OK" then do
+                  zerrsm = "Error!"
+                  zerrlm = "Requested database" cavdb ,
+                           "was not found. Try again."
+                  "Setmsg msg(isrz002)"
+                  exit 12
+                  end
+               lastdb = cavdb
+               "Vput (lastdb) Profile"
+               end
+            If wordpos("/CA",options) > 0 then UseCA = 1
+                                          else UseCA = 0
+            If wordpos("/LAST",options) > 0 then do
+               "Vget (lastdb) Profile"
+               slash_last = 1
+               cavdb = lastdb
+               end
+            end
+
+        /* ---------------------------------- *
+         * Test for UseCA (/CA) Specification *
+         * ---------------------------------- */
+         if UseCA = 1 then
+            if slash_last <> null then do
+               call do_cadialog
+               return
+               end
+
+        /* ---------------------------- *
+         * Test for /LAST Specification *
+         * ---------------------------- */
+         if lastdb <> null then signal start
+
+        /* --------------------------------------------------- *
+         * First:                                              *
+         * Build the selection table list of available CA-View *
+         * databases.                                          *
+         * --------------------------------------------------- */
+         First:
+            call Get_DB
+
+         Start:
+        /* --------------------------------------------------------- *
+         * Display the prompting panel for the:                      *
+         *   rptid    Report ID                                      *
+         *   rptgen   Report Generation                              *
+         *   fromdate Starting date for report selection             *
+         *   todate   Ending date for report selection               *
+         *                                                           *
+         * fromdate may be null or TODAY, WEEK, or MONTH or mm/dd/yy *
+         * todate may be null or TODAY or mm/dd/yy                   *
+         *                                                           *
+         * On Exit return to label FIRST for DB selection            *
+         * --------------------------------------------------------- */
+         Do Forever
+            if rptmask <> null then do
+               rptid   = rptmask
+               rptmask = null
+               end
+            if refresh = 1 then call restart
+            else do
+               "Display Panel(cavxtrt)"
+               if rc > 4 then do
+                   if slash_last = null then signal first
+                       else return
+                   end
+               "Vput (rptid rptgen fromdate todate) Profile"
+               call start_it
+               end
+            end
+
+        /* ------------------------ *
+         * Now Start the processing *
+         * ------------------------ */
+         Start_It:
+         cav_server = cavdb
+         parse value "" with stat
+
+        /* ---------------------------- *
+         * Test for FROMDATE and TODATE *
+         *  - Today is today's date     *
+         *  - Week is the last 7 days   *
+         *  - Month is the last 31 days *
+         * ---------------------------- */
+         parse value "" with from to
+        /* ----------------- *
+         * Test the FROMDATE *
+         * ----------------- */
+         Select
+         when translate(FROMDATE) = "TODAY" then do
+            from = date('b')
+            end
+         when translate(FROMDATE) = "WEEK" then do
+            date = date('b')
+            from = date('b',date-7,'b')
+            end
+         when translate(FROMDATE) = "MONTH" then do
+            date = date('b')
+            from = date('b',date-31,'b')
+            end
+         otherwise do
+            if fromdate <> null then do
+              call valid_date fromdate
+              if drc > 0 then return
+              from = date('b',fromdate,datefmt)
+              end
+          end
+         end
+
+        /* --------------- *
+         * Test the TODATE *
+         * --------------- */
+         Select
+         when translate(TODATE) = "TODAY" then do
+            to = date('b')
+            end
+         otherwise do
+            if todate <> null then do
+              call valid_date todate
+              if drc > 0 then return
+              to   = date('b',todate,datefmt)
+              end
+          end
+         end
+
+        /* ---------------------------------------------- *
+         * If Fromdate and Todate then Gen is * (for all) *
+         * ---------------------------------------------- */
+         if length(from) + length(to) > 0 then rptgen = "*"
+
+        /* ----------------------------- *
+         * If Gen is ALL then reset to * *
+         * ----------------------------- */
+         if translate(rptgen) = "ALL" then rptgen = "*"
+
+        /* -------------------------------------------------------- *
+         * Test for a Generic ReportID. If so then build a testrpt  *
+         * variable with all non wild-card (*) characters.          *
+         *                                                          *
+         * Set the nogen variable to 1 to cause the generic routine *
+         * to be invoked.                                           *
+         * -------------------------------------------------------- */
+         if pos("*",rptid) = 0 then nogen = 0
+            else do
+                 nogen   = 1
+                 rptmask = rptid
+                 p       = pos("*",rptid)
+                 rptid   = left(rptid,p)
+                 testrpt = null
+                 do i = 1 to length(rptmask)
+                    if substr(rptmask,i,1) = "*" then iterate
+                    testrpt = strip(testrpt""substr(rptmask,i,1))
+                    end
+
+                 end
+
+        /* ------------------------------------ *
+         * Set Selection Info for display later *
+         * ------------------------------------ */
+         selinfo = "Report id:" rptid "Gen:" rptgen
+         if from <> null then
+            selinfo = selinfo "From:" date(datefmt,from,'b')
+         if to <> null then
+            selinfo = selinfo "To:" date(datefmt,to,'b')
+
+        /* -------------------------------------- *
+         * Now Setup allocations for initial list *
+         * -------------------------------------- */
+         ReStart:
+         if pos("*",rptid) > 0 then rptmask = rptid
+         Address TSO
+        "Delete" prt_dsn
+        "Delete" tmp_dsn
+        "Alloc f(sysprint) ds("prt_dsn") new spa(15,15)" ,
+           "tr recfm(f b a) lrecl(133) blksize(0) reuse"
+        "Alloc f(report) ds("tmp_dsn") new" ,
+            "spa(30,30) tr reuse"
+        "Alloc f(sysin)  new spa(1,1) tr reuse" ,
+           "recfm(f b) lrecl(80) blksize(800)"
+
+        /* ----------------------- *
+         * Setup List control card *
+         * ----------------------- */
+         if refresh <> 1 then
+            cc.1 = "/LIST ID="rptid" GEN="rptgen
+         else cc.1 = save_cc
+         save_cc = cc.1
+
+        "Execio * diskw sysin (finis stem cc."
+
+        /* --------------------------- *
+         * Now Call SAR Batch (SARBCH) *
+         * --------------------------- */
+         call sarbch_pgm
+         if sar_rc <> 0 then do
+           "Delete" tmp_dsn
+           "Delete" prt_dsn
+            return
+            end
+
+        /* ----------------------------------------- *
+         * Read in the list and free the allocations *
+         * ----------------------------------------- */
+         drop in.
+        "Execio * Diskr report (finis stem in."
+        "Free f(sysprint report sysin)"
+      /* Check for new release of Ca-View */
+        If pos('(11.)',in.1) > 0 then release_lvl = 11
+                                  else release_lvl = 2
+        If pos('(14.',in.1) > 0 then release_lvl = 14
+        "Delete" tmp_dsn
+        "Delete" prt_dsn
+
+        /* ------------------------- *
+         * Now create the ISPF Table *
+         * ------------------------- */
+        Address ISPExec
+        "TBCreate" table_name " names(stat rpt jname jid gen seq" ,
+                 "archdate archtime prtlines xcode pages dloc" ,
+                 "prtdate)" ,
+                 "Nowrite"
+
+        /* ----------------------------------- *
+         * Process the list to build the table *
+         * ----------------------------------- */
+        added = 0
+        hit   = 0
+        do i = 1 to in.0
+           if left(in.i,1) = "1" then hit = 0
+           if hit <> 1 then do
+              if left(in.i,4) = " ---" then hit = 1
+              if left(in.i,3) = "0ID" then do
+                 if release_lvl > 2 then do
+                      locpos   = pos("Loc ",in.i)
+                      xcodepos = pos("Xcode ",in.i)
+                      tseqpos  = pos(" Tseq",in.i)
+                    end
+                 else do
+                      locpos   = pos("LOC ",in.i)
+                      xcodepos = pos("XCODE ",in.i)
+                      tseqpos  = pos(" TSEQ",in.i)
+                      end
+                 tseqpos  = tseqpos + 1
+                 end
+              iterate
+              end
+
+        /* ----------------------------------------------------- *
+         * This only needs to change if the CA-View report format*
+         * for the SARBCH /LIST report changes.                  *
+         * ----------------------------------------------------- */
+           parse var in.i 2 rpt jname jid gen seq ,
+                 archdate archtime ,
+                 =(locpos) dloc prtlines pages blocks ,
+                 =(xcodepos) xcode =(tseqpos) tseq .
+           jid = left(jid,1)right(jid,5)
+           /* Create two digit year */
+         parse var archdate mm '/' dd '/' YY
+         if yy > 100 then
+            YY = substr(yy,3,2)
+         archdate = mm||'/'||dd||'/'||YY
+           tdate = date('b',archdate,datefmt)
+           if from <> null then do
+              if tdate < from then iterate
+              end
+           if to <> null then do
+              if tdate > to then iterate
+              end
+           xrc = 0
+           prtdate = tdate
+           if nogen = 1 then call test_generic
+           if xrc = 1 then iterate
+           "TBAdd" table_name
+           added = added + 1
+           end
+         if added < 1 then do
+            zerrsm = "Error"
+            zerrlm = "The selection critera resulted in no",
+                     "reports found.  Try again."
+            "Setmsg msg(isrz002)"
+            return
+            end
+         "TBTop" table_name
+         if refresh = 1 then do
+            zerrsm = "Refreshed"
+            zerrlm = "Refresh completed."
+            "Setmsg msg(isrz002)"
+            refresh = null
+            end
+
+        /* ---------------------------------------- *
+         * Now display the list of avilable reports *
+         * ---------------------------------------- */
+         mult_sels = 0
+         crp = 1
+         rowcrp = 0
+         src    = 0
+         drop load.
+         load.0 = 0
+         disp:
+         do forever
+            if refresh = 1 then return
+            cavxfind = "PASSTHRU"
+            sel = null
+            if mult_sels = 0 then do
+              tm.0 = 0
+              "TBTop" table_name
+              "TBSkip" table_name "Number("crp") "
+                 "TBDispl" table_name "Panel(cavxtrtl)" ,
+                         "Csrrow("rowcrp") AutoSel(No)"
+              end
+            else
+              "TBDispl" table_name
+            t_rc = rc
+            crp = ztdtop
+            mult_sels = ztdsels
+            if rc > 7 then do
+               "TBEnd" table_name
+                return
+                end
+             cavxfind = null
+             call do_it
+           end
+
+        /* -------------------------- *
+         * Now Process the Selections *
+         * -------------------------- */
+         Do_It:
+            act = null
+            if abbrev("REFRESH",zcmd,3) = 1 then do
+               "TBEnd" table_name
+               refresh = 1
+               return
+               end
+            osel = null
+            Select
+              When abbrev("FIND",word(zcmd,1),1)  = 1 then call do_find
+              When abbrev("RFIND",word(zcmd,1),1) = 1 then call do_find
+              When abbrev("SORT",word(zcmd,1),2) = 1 then call do_sort
+              When left(zcmd,4) = "SORT" then call do_sort
+              When left(sel,1) = "B" then call do_browse
+              When left(sel,1) = "C" then call do_copy
+              When left(sel,2) = "DD" then call do_delete
+              When left(sel,1) = "M" then call do_mail
+              When left(sel,1) = "P" then call do_print
+              When left(sel,1) = "T" then call do_transfer
+              When left(sel,1) = "V" then call do_view
+              When sel = "L" then call do_load
+              otherwise do
+                        if load.0 > 0 then call quick_refresh
+                        end
+              end
+            if act <> null then do
+               stat = sel
+               "TBPut" table_name
+               end
+            return
+
+        /* -------------------------------------------------------- *
+         * Mail the Report.                                         *
+         *                                                          *
+         * Extract the report from CA-View and then invoke the      *
+         * XMITIP ISPF dialog using the XMITIP Front-End interface. *
+         *                                                          *
+         * The report will be e-mailed using the SMTP protocol.     *
+         * -------------------------------------------------------- */
+         Do_Mail:
+            call Extract_It
+            if osel <> null then return
+            if sar_rc <> 0 then return
+            "Control Display Save"
+            Address TSO
+            "%xmitipfe File("ext_dsn")" ,
+              "Subject(Report from CA-View)"
+            "Delete" ext_dsn
+            Address ISPExec
+            "Control Display Restore"
+            act = sel
+            return
+
+        /* ---------------------------------------------------- *
+         * Copy the Report to a standard dataset.               *
+         *                                                      *
+         * Prompt the user for a target dataset and then do the *
+         * report extraction from CA-View.                      *
+         * ---------------------------------------------------- */
+         Do_Copy:
+            call Extract_It 'file'
+            if osel <> null then return
+            if sar_rc <> 0 then return
+            zerrsm = "Complete"
+            zerrlm = "Selected Report has been saved",
+                     "in dataset:" ext_dsn
+            "Setmsg msg(isrz002)"
+            act = sel
+            return
+
+        /* ------------------------ *
+         * Sort the Report          *
+         *                          *
+         * Sort by column headings. *
+         * ------------------------ */
+         Do_Sort:
+            parse value zcmd with o1 opt
+            if pos(",",opt) > 0 then
+               parse value opt with opt","sortseq
+            sortseq = translate(sortseq)
+            if pos(sortseq,"AD") = 0
+               then sortseq = "A"
+            opt = translate(opt)
+            sort = null
+            Select
+              When abbrev("ARCHDATE",opt,5)  = 1 then sort = "prtdate"
+              When abbrev("ARCHTIME",opt,5)  = 1 then sort = "archtime"
+              When abbrev("GEN",opt,1)       = 1 then sort = "gen"
+              When abbrev("JOBID",opt,4)     = 1 then sort = "jid"
+              When abbrev("JOBNAME",opt,4)   = 1 then sort = "jname"
+              When abbrev("LINES",opt,2)     = 1 then sort = "prtlines"
+              When abbrev("LOC",opt,2)       = 1 then sort = "dloc"
+              When abbrev("REPORT-ID",opt,1) = 1 then sort = "rpt"
+              When abbrev("XCODE",opt,1)     = 1 then sort = "xcode"
+              Otherwise do
+                        zerrsm = "Error"
+                        zerrlm = "Selected sort value invalid" opt ,
+                                 "try again with any of the column" ,
+                                 "headings."
+                        "Setmsg msg(isrz002)"
+                        return
+                        end
+              end
+            if wordpos(sort,"gen prtlines") > 0 then stype = "N"
+                                                else stype = "C"
+            if sort = "prtdate" then
+               "TBSort" table_name ,
+               "fields(prtdate,C,"sortseq",archtime,C,"sortseq")"
+            else
+               "TBSort" table_name ,
+               "fields("sort","stype","sortseq")"
+            return
+
+        /* ---------------------------------------------------- *
+         * Browse the Report.                                   *
+         *                                                      *
+         * Extract the report then invoke ISPF Browse.          *
+         *                                                      *
+         * Upon completion delete the temporary report dataset. *
+         * ---------------------------------------------------- */
+         Do_Browse:
+            call Extract_It
+            if osel <> null then return
+            if sar_rc <> 0 then return
+            "Control Display Save"
+            "Browse dataset("ext_dsn")"
+            "Control Display Restore"
+            Address TSO,
+               "Delete" ext_dsn
+            act = sel
+            return
+
+        /* ---------------------------------------------------- *
+         * View the Report.                                     *
+         *                                                      *
+         * Extract the report then invoke ISPF View.            *
+         *                                                      *
+         * Upon completion delete the temporary report dataset. *
+         * ---------------------------------------------------- */
+         Do_View:
+            call Extract_It
+            if osel <> null then return
+            if sar_rc <> 0 then return
+            "Control Display Save"
+            "View dataset("ext_dsn")"
+            "Control Display Restore"
+            Address TSO,
+               "Delete" ext_dsn
+            act = sel
+            return
+
+        /* ------------------------------------------------------ *
+         * Setup the JCL for submission for batch processing.     *
+         *                                                        *
+         * If multiple rows were selected then build one job with *
+         * all LOAD selections for submission.                    *
+         * ------------------------------------------------------ */
+         Do_Load:
+        /* ----------------------------------------------- *
+         * If the Report is currently online then skip it. *
+         * ----------------------------------------------- */
+         if stat = "L" then do
+            zerrsm = "Warning"
+            zerrlm = "The last action on this report was a Load",
+                     "thus a second Load is prevented." ,
+                     "Be patient."
+            "Setmsg msg(isrz002)"
+            return
+            end
+         if wordpos(dloc,"DISK PDSK PERM TEMP PTMP") > 0 then do
+            zerrsm = "Error"
+            zerrlm = "The requested report is currently",
+                     "in location" dloc "and does not",
+                     "need to be restored from tape."
+            "Setmsg msg(isrz002)"
+            return
+            end
+         c      = load.0 + 1
+         load.c = "/LIST ID="rpt "GEN="gen
+         load.0 = c
+         if mult_sels <> 1 then do
+            tm = tm.0 + 1
+            tm.tm = "/LOAD GEN="gen "ID="rpt "SEQ="seq
+            tm.0 = tm
+            act = sel
+            return
+            end
+
+        /* ---------------------------------------------------- *
+         * Construct JOB Card and JCL                           *
+         * ---------------------------------------------------- */
+         call build_job_card
+         drop t.0
+         t.4 = "//STEP1    EXEC PGM=SARBCH,PARM='"cav_server"'"
+         t.5 = "//SYSPRINT DD SYSOUT=*"
+         t.6 = "//SYSIN    DD  *"
+         t.7 = "/LOAD GEN="gen "ID="rpt "SEQ="seq
+         t.0 = 7
+         if tm.0 > 0 then do
+            c = t.0
+            do i = 1 to tm.0
+               c = c + 1
+               t.c = tm.i
+               end
+            t.0 = c
+            end
+         function = "to restore the requested report",
+                    "from tape to disk. When the job",
+                    "ends you may use the other options",
+                    "to process the report. Press ENTER",
+                    "to refresh the Load requested report",
+                    "status."
+         call Submit_JCL
+         act = sel
+         return
+
+        /* -------------------------------------------------------- *
+         * Print the Report.                                        *
+         *                                                          *
+         * Extract the report to a standard dataset.                *
+         *                                                          *
+         * Prompt the user for the PRINTDS command options and then *
+         * build the PRINTDS command.                               *
+         * -------------------------------------------------------- */
+         Do_Print:
+         call Extract_It
+         if osel <> null then return
+         "Control Display Save"
+         "Display Panel(cavxtrts)"
+         prc = rc
+         "Control Display Restore"
+         if prc > 0 then return
+         "Vput (spc spcp spfm spdest spfcb spucs sppm sppdef" ,
+               "spfdef spodes schr) Profile"
+
+        /* --------------------- *
+         * Setup PRINTDS options *
+         * --------------------- */
+         Address TSO
+         parse value time() with hh":"mm":"ss
+         ddn  = "cx"hh""mm""ss
+         if spc <> null then
+            propt = "Class("spc")"
+         if spcp <> null then
+            propt = propt "Copies("spcp")"
+         if schr <> null then
+            propt = propt "Chars("schr")"
+         if spfm <> null then
+            propt = propt "Forms("spfm")"
+         if spdest <> null then
+            propt = propt "Dest("spdest")"
+         if spfcb <> null then
+            propt = propt "Fcb("spfcb")"
+         if spucs <> null then
+            propt = propt "UCS("spucs")"
+        /* ----------------------- *
+         * Test for OUTDES options *
+         * ----------------------- */
+         od = null
+         if sppm <> null then
+            od = "PRMode("sppm")"
+         if sppdef <> null then
+            od = od "Pagedef("sppdef")"
+         if spfdef <> null then
+            od = od "Formdef("spfdef")"
+         if spodes =  null then
+            if od <> null then do
+               "Outdes" ddn "New" od
+               end
+               else ddn = null
+         if spodes <>  null then do
+              ddn = spodes
+              end
+         if ddn <> null then
+            odes = "Outdes("ddn")"
+         else odes = null
+
+        /* ---------------------------------- *
+         * Issue the PRINTDS command to print *
+         * ---------------------------------- */
+         "Pr dsn("ext_dsn")" odes propt
+
+         if spodes =  null then
+            if od <> null then
+               "Free outdes("ddn")"
+         "Delete" ext_dsn
+
+         zerrsm = "Printed"
+         zerrlm = "Requested Report printed to:" spdest
+         Address ISPExec
+         "Setmsg msg(isrz002)"
+         act = sel
+         return
+
+        /* ------------------------------------------------------- *
+         * Do File Transfer                                        *
+         *   - support IND$FILE (normal terminal emulator tranfer) *
+         *   - support FTP (from the users workstation)            *
+         * ------------------------------------------------------- */
+         Do_Transfer:
+            call Extract_It
+            if osel <> null then return
+            if sar_rc <> 0 then return
+            call get_tcpip
+            Address TSO ,
+              "Rename" ext_dsn xferdsn
+            "Control Display Save"
+            do forever
+               "Display panel(cavxtrtx)"
+               xrc = rc
+               if zcmd <> null then do
+                  Address TSO zcmd
+                  xrc = 1
+                  end
+               if xrc > 0 then leave
+               end
+            "Control Display Restore"
+            Address TSO,
+              "Delete" xferdsn
+            if xrc = 1 then do
+               zerrsm = "Complete."
+               zerrlm = "File transfer request for" ext_dsn ,
+                        "has been completed."
+               end
+            else do
+               zerrsm = "Cancelled"
+               zerrlm = "File transfer request for" ext_dsn ,
+                        "has been cancelled."
+               end
+            Address ISPExec
+            "Setmsg msg(isrz002)"
+            act = sel
+            return
+
+        /* ----------------------------------- *
+         * Get current TCP/IP Host information *
+         * ----------------------------------- */
+         Get_Tcpip:
+            res    = Socket('Initialize','ANYNAME')
+            host   = Socket('GetHostId')
+            name   = word(Socket('GetHostname'),2)
+            domain = word(Socket('GetDomainName'),2)
+            res    = Socket('Terminate')
+            ftphost = name"."domain
+            return
+
+        /* -------------------------------------------------------- *
+         * Quick Refresh: This routine will refresh the Location of *
+         * all reports which have had a LOAD request performed. If  *
+         * the location changes then the entry will be updated in   *
+         * the table and removed from the load.x stem               *
+         * -------------------------------------------------------- */
+         Quick_Refresh:
+         load_count = 0
+         Address TSO
+         "Delete" prt_dsn
+         "Alloc f(sysprint) ds("prt_dsn") new spa(15,15)" ,
+            "tr recfm(f b a) lrecl(133) blksize(0) reuse"
+         "Delete" tmp_dsn
+         "Alloc f(report) ds("tmp_dsn") mod" ,
+           "spa(30,30) tr"
+         "Alloc f(sysin)  new spa(1,1) tr reuse" ,
+            "recfm(f b) lrecl(80) blksize(800)"
+         "Execio * diskw sysin (finis stem load."
+         call sarbch_pgm
+         drop in.
+         "Execio * diskr report (finis stem in."
+         "Free f(sysprint report sysin)"
+         "Delete" tmp_dsn
+         "Delete" prt_dsn
+         Address ISPExec
+         do i = 1 to in.0
+            if left(in.i,1) = "1" then hit = 0
+            if hit <> 1 then do
+               if left(in.i,4) = " ---" then hit = 1
+               iterate
+               end
+          /* ----------------------------------------------------- *
+           * This only needs to change if the CA-View report format*
+           * for the SARBCH /LIST report changes.                  *
+           * ----------------------------------------------------- */
+           parse var in.i 2 $rpt x x $gen $seq . =(locpos) $dloc .
+           call update_row
+           end
+         c = 0
+         do i = 1 to load.0
+            if load.i <> "xx" then do
+               c = c + 1
+               temp.c = load.i
+               end
+            end
+         temp.0 = c
+         drop load.
+         do i = 1 to temp.0
+            load.i = temp.i
+            end
+         load.0 = temp.0
+         drop temp.
+         return
+
+        /* ------------------------- *
+         * Update report information *
+         * ------------------------- */
+         Update_Row:
+         "TBTop" table_name
+         row = 0
+         do forever
+         "TBSkip" table_name
+         if rc > 0 then return
+         row = row + 1
+         if rpt = $rpt then
+            if gen = $gen then
+               if seq = $seq then
+               if dloc <> $dloc then do
+                  dloc = $dloc
+                  stat = "*"
+                  load_count = load_count + 1
+                  "TBPut" table_name
+                  if sel /= "DD" then do
+                     zerrsm = "Loaded"
+                     zerrlm = load_count "of" load.0 "reports",
+                              "have been loaded and the Act",
+                              "has been changed from L to *."
+                     end
+                  else do
+                     zerrsm = "Deleted"
+                     zerrlm = "The selected report has been",
+                              "deleted from disk and the Act",
+                              "has been changed to *."
+                     end
+                  "Setmsg msg(isrz002)"
+                  do c = 1 to load.0
+                     parse value load.c with x "ID="id "GEN="gen
+                     if id = rpt then
+                        if gen = $gen then
+                           load.c = "xx"
+                     end
+               end
+         end
+         return
+
+        /* ----------------------------------------------------------- *
+         * Generalized Report Extraction routine.                      *
+         *                                                             *
+         * This routine will extract the requested report from CA-View *
+         * as long as it currently resides on DISK, PDSK, PERM, PTMP,  *
+         * or TEMP storage.                                            *
+         *                                                             *
+         * If the report is not then convert the action to a LOAD.     *
+         *                                                             *
+         * ----------------------------------------------------------- */
+         Extract_It:
+           if wordpos(dloc,"DISK PDSK PERM TEMP PTMP") = 0 then do
+              osel = sel
+              sel  = "L"
+              call do_load
+              if stat = "L" then return
+              zerrsm = "Submitted"
+              zerrlm = "Selection changed from" osel "to" ,
+                       sel "as the report resides on Tape." ,
+                       "Job" jobname "has been submitted",
+                       "to restore the requested report",
+                       "from tape to disk. When the job",
+                       "ends you may use the other options",
+                       "to process the report. Press ENTER",
+                       "to refresh the Load requests location.",
+                       "The ACT field will change from L to *",
+                       "when the report has been loaded."
+              "Setmsg msg(isrz002)"
+              return
+              end
+           arg opt
+           if opt = "FILE" then do
+              "Addpop"
+              "Display Panel(cavxtrtp)"
+              xrc = rc
+              "Rempop"
+              if xrc > 0 then do
+                 zerrsm = "Cancelled"
+                 zerrlm = "Extract cancelled."
+                 "Setmsg msg(isrz002)"
+                 return
+                 end
+              ext_dsn = cavxtdsn
+              end
+           else do
+                if sysvar('syspref') <> sysvar('sysuid') then do
+                   if sysvar('syspref') <> null then
+                      hlq = sysvar('syspref')"."sysvar('sysuid')
+                   else
+                      hlq = sysvar('sysuid')
+                   ext_dsn = "'"hlq".CAVXTRT."jname".G"gen".CAV'"
+                   xferdsn = "'"hlq".CAV.REPORT'"
+                   end
+                else do
+                   ext_dsn = "CAVXTRT."jname".G"gen".CAV"
+                   xferdsn = "CAV.REPORT"
+                   end
+                end
+
+          /* -------------------------------------------------------- *
+           * Build the SARBCH /LOAD control card that will extract    *
+           * the CA-View report and place it into a standard dataset. *
+           * -------------------------------------------------------- */
+            Address TSO
+            cc.1 = "/LOAD GEN="gen "ID="rpt ,
+                   "SEQ="seq "DDNAME=CAVXTRT"
+            "Delete" ext_dsn
+            if wordpos(dloc,"DISK PDSK PERM TEMP PTMP") = 0 then
+               say "Report is located on Tape.",
+                   "Please be patient."
+            "Delete" prt_dsn
+            "Alloc f(sysprint) ds("prt_dsn") new spa(15,15)" ,
+              "tr recfm(f b a) lrecl(133) blksize(0) reuse"
+             space = ((prtlines * 255)%54000)%4
+             if space > 1000 then ucount = "ucount(4)"
+                             else ucount = null
+             sec   = (space%2) + 1
+            "Alloc f(cavxtrt) ds("ext_dsn") new" ,
+                "spa("space","sec") tr" ucount ,
+                "recfm(f b) lrecl(133) blksize(0)"
+            "Alloc f(sysin)  new spa(1,1) tr reuse" ,
+               "recfm(f b) lrecl(80) blksize(800)"
+            "Execio * diskw sysin (finis stem cc."
+            Address ISPExec
+            "Control Display Save"
+            "Addpop"
+            "Control Display Lock"
+            "Display Panel(cavxtrtw)"
+            "Rempop"
+            "Control Display Restore"
+            Address TSO
+            call sarbch_pgm
+            "Free f(sysin sysprint cavxtrt)"
+            "Delete" prt_dsn
+            Address ISPExec
+           return
+
+           /* ----------------------------------- *
+            * Perform a Delete of the Online Copy *
+            * of the specified report.            *
+            * If the Location is DISK then bypass.*
+            * ----------------------------------- */
+            Do_Delete:
+            if dloc = "DISK" then do
+               zerrsm = "Error"
+               zerrlm = "The requested report is on DISK and has not",
+                        "yet had an archive copy made in the CA-View",
+                        "data base. Delete action cancelled for now",
+                        "until an archive copy has been created."
+               "Setmsg Msg(isrz002)"
+               return
+               end
+            if wordpos(dloc,"PDSK TEMP PTMP PERM") = 0 then do
+               zerrsm = "Error"
+               zerrlm = "The requested report is not on disk and thus",
+                        "there is no need for this delete action.",
+                        "This application does not support doing a full",
+                        "delete of the report."
+               "Setmsg Msg(isrz002)"
+               return
+               end
+            drop c.0
+            cc.1 = "/DELETE ID="rpt "GEN="gen "SEQ="seq "DISK"
+            act = sel
+            Address TSO
+            "Delete" ext_dsn
+            "Delete" prt_dsn
+            "Alloc f(sysprint) ds("prt_dsn") new spa(1,1)" ,
+              "tr recfm(f b a) lrecl(133) blksize(0) reuse"
+            "Alloc f(sysin)  new spa(1,1) tr reuse" ,
+               "recfm(f b) lrecl(80) blksize(800)"
+            "Execio * diskw sysin (finis stem cc."
+            call sarbch_pgm
+            "Free f(sysin sysprint)"
+            "Delete" prt_dsn
+            Address ISPExec
+            c      = load.0 + 1
+            load.c = "/LIST ID="rpt "GEN="gen
+            load.0 = c
+            call quick_refresh
+            return
+
+        /* ---------------------------------------------- *
+         * Call the CA-View batch utility program SARBCH. *
+         * ---------------------------------------------- */
+         Sarbch_PGM:
+        "Call *(SARBCH) '"cav_server"'"
+         sar_rc = rc
+         if sar_rc > 0 then do
+            Address ISPExec
+            "Control Display Save"
+            "Browse dataset("prt_dsn")"
+            "Browse dataset("tmp_dsn")"
+            "Control Display Restore"
+            Address TSO
+            end
+         return
+
+        /* ------------------ *
+         * Validate the Dates *
+         * ------------------ */
+         Valid_Date: Procedure expose null drc zerralrm zerrhm
+         arg date
+         drc = 0
+         parse value date with mm"/"dd"/"yy
+         if datatype(mm) <> "NUM" then drc = 4
+         if datatype(dd) <> "NUM" then drc = 4
+         if datatype(yy) <> "NUM" then drc = 4
+         if mm < 1 | mm > 12 then drc = 4
+         if dd < 1 | dd > 31 then drc = 4
+         if drc = 0 then return
+         zerrsm = "Date Error"
+         zerrlm = "Error in date" date". Try again."
+         "Setmsg msg(isrz002)"
+         return
+
+        /* --------------------------------------- *
+         * Process the Generic ReportID selection: *
+         *   * = single wild character             *
+         *  ** = any number of wild characters     *
+         * --------------------------------------- */
+         Test_Generic: Procedure Expose xrc rpt rptmask null testrpt ,
+                                        zerralrm zerrhm
+         j   = 1
+         xrc = 1
+         test = null
+         do i = 1 to length(rptmask)
+         Select
+            When j > length(rpt) then nop
+            When substr(rptmask,i,1) <> "*" then do
+                 test = strip(test""substr(rpt,j,1))
+                 j = j + 1
+                 end
+            When substr(rptmask,i,2) = "**" then do
+                 if pos("*",substr(rptmask,i+2)) = 0 then do
+                      tmp = substr(rptmask,i+2)
+                      if right(rpt,length(tmp)) = tmp
+                         then j = length(rpt)
+                         test = strip(test""tmp)
+                         end
+                 else do
+                      tc = substr(rptmask,i+2,1)
+                      j  = pos(tc,rpt,j)
+                      if j = 0 then return
+                      i  = i + 1
+                      end
+                 end
+            When substr(rptmask,i,1) = "*" then j = j + 1
+            end
+         end
+         if testrpt = test then xrc = 0
+         return
+
+        /* ----------------------------------------------------- *
+         * Find sub-routine                                      *
+         * ----------------------------------------------------- */
+        Do_Find:
+              parse value zcmd with o1 argument
+              upper argument
+              argument = strip(argument)
+              zsel = ''
+              hit  = 1
+              hcc  = 0
+              crp  = ztdtop
+              find_loop = ''
+              search    = ''
+              rowid     = crp
+              if o1     = "RFIND" then do
+                 argument = save_arg
+                 last_find = last_find + 1
+                 "TBTOP " table_name
+                 "TBSKIP" table_name "Position(ROWID) Number("Last_find")"
+                 end
+                 else do
+                      if rowid > 1 then
+                      "TBSKIP" table_name "Position(rowid)"
+                      end
+              if rc = 8 then do
+                             "TBTop" table_name
+                             "TBSKIP" table_name "Position(ROWID)"
+                             s_smsg = "Wrapped"
+                             end
+                        else s_smsg = "Found"
+
+              /* ---------------------- *
+               * Now perform the Search *
+               * ---------------------- */
+
+              save_arg = argument
+              do forever
+                 search = rpt jname
+                 if pos(argument,search) > 0 then do
+                    crp = rowid + 0
+                    rowcrp = crp
+                    last_find = crp
+                        zerrsm = s_smsg   /* "Found" */
+                        zerrlm = argument "found during search in row:" crp
+                       "Setmsg Msg(isrz002)"
+                    leave
+                    end
+                 "TBSKIP" table_name "POSITION(Rowid)"
+                 if rc = 8 then do
+                       "TBTOP" table_name
+                        s_smsg = "Wrapped"
+                    if find_loop = "on" then do
+                        zerrsm = "Not Found"
+                        zerrlm = argument "Not found during search"
+                        rowid = crp
+                       "Setmsg Msg(isrz002)"
+                        leave
+                        end
+                        else find_loop = "on"
+                    end
+                 zsel = ''
+                 end
+         return
+
+        /* --------------------------------------------- *
+         * Invoke the Computer Associates CA-View Dialog *
+         * --------------------------------------------- */
+         Do_CADialog: procedure expose cavdb null panels tables ,
+                                       zerralrm zerrhm
+         if panels <> null then
+            "Libdef ISPPLIB Dataset id("panels")" ,
+                   "Stack"
+         if tables <> null then
+            "Libdef ISPTLIB Dataset id("tables")" ,
+                   "Stack"
+         "Select PGM(SARSPF) PARM("cavdb") NewAppl(SAR) Passlib" ,
+            "SCRName(CAView)"
+         if panels <> null then
+            "Libdef ISPPLIB"
+         if tables <> null then
+            "Libdef ISPTLIB"
+         return
+
+        /* ----------------------------------------------------------- *
+         * Get_DB: Build the ISPF Table of available CA-View (aka SAR) *
+         * databases.                                                  *
+         *                                                             *
+         * The available databases are determined based upon the       *
+         * current NJE Node name.                                      *
+         *                                                             *
+         * Format is database-dsn database-description                 *
+         *                                                             *
+         * Variable JOBCLASS, if set, will cause the generated JCL     *
+         * to have a CLASS=jobclass                                    *
+         * ----------------------------------------------------------- */
+         Get_DB:
+             if tab.0 = 0 then do
+                zerrsm = "Error"
+                zerrlm = "The current environmet" node ,
+                         "does not support any CA-View",
+                         "databases. Exiting Application."
+                "Setmsg msg(isrz002)"
+                exit 4
+                end
+
+        /* ---------------------------------------- *
+         * If one entry then use it and skip prompt *
+         * ---------------------------------------- */
+         if admin /= "OK" then
+         if tab.0 = 1 then do
+            if first_pass = 1 then exit
+            parse value tab.1 with cavdb cavdbdes
+            first_pass = 1
+            return
+            end
+
+        /* -------------------------------------- *
+         * Now Create the ISPF Table of databases *
+         * -------------------------------------- */
+         "TBCreate cavdbtbl Names(sel cavdb cavdbdes) NoWrite"
+         sel = null
+         do i = 1 to tab.0
+            parse value tab.i with cavdb cavdbdes
+            cavdb    = translate(strip(cavdb))
+            cavdbdes = strip(cavdbdes)
+            "TBAdd cavdbtbl"
+            end
+
+        /* --------------------------------------------- *
+         * Display the ISPF Table of Available Databases *
+         *                                               *
+         * Row selection options:                        *
+         *    C = invoke CA's View ISPF Interface        *
+         *    V = display data base statistics           *
+         *    non-blank open the data base               *
+         * --------------------------------------------- */
+         "TBSort cavdbtbl Fields(cavdbdes)"
+         "TBTop cavdbtbl"
+         top = 1
+         do forever
+            sel = null
+            "TBTop cavdbtbl"
+            "TBSkip cavdbtbl Number("top")"
+            "TBDispl cavdbtbl Panel(cavxtrtd)"
+            if rc > 7 then do
+               "TBEnd cavdbtbl"
+               exit
+               end
+            top  = ztdtop
+            ssel = sel
+            if row <> null then
+               if row > 0 then do
+                 "TBTop cavdbtbl"
+                 "TBSkip cavdbtbl NUMBER("row")"
+                 end
+            sel = ssel
+            lastdb = cavdb
+            "Vput (lastdb jobclass) Profile"
+            /* ------------------------------- *
+             * Data Base Selection - Non-Admin *
+             * ------------------------------- */
+            if admin <> "OK" then
+            Select
+               When sel = "C" | UseCA = 1 then do
+                  call do_cadialog
+                  end
+               When sel <> null then do
+                  "TBEnd cavdbtbl"
+                  return
+                  end
+               Otherwise nop
+               end
+            /* --------------------------- *
+             * Data Base Selection - Admin *
+             * --------------------------- */
+            if admin = "OK" then
+            Select
+               When sel = "C" | UseCA = 1 then do
+                  call do_cadialog
+                  end
+               When sel = "R" then call do_reorg
+               When sel = "V" then call do_stats
+               When sel = "VF" then call do_stats
+               When sel <> null then do
+                  "TBEnd cavdbtbl"
+                  return
+                  end
+               Otherwise nop
+               end
+            end
+         return
+
+        /* ------------------------------------------------- *
+         * Display the statistics for the selected data base *
+         * ------------------------------------------------- */
+         Do_Stats: procedure expose cavdb admin zerralrm zerrhm sel
+         report = "cav.report.d"random(99999)
+         Address TSO
+         "alloc f(sysprint) ds("report") new spa(1,1) tr reuse"
+         "alloc f(sysin) unit(sysallda) spa(1) tr recfm(f b) lrecl(80)" ,
+               "reuse"
+         if sel = "VF" then
+            stat.1 = "STATUS FULL"
+         else
+            stat.1 = "STATUS"
+         "Execio * diskw sysin (finis stem stat."
+         "call *(sardbase) '"cavdb"'"
+         "alloc f(sysprint) ds(*) reuse"
+         "alloc f(sysin)    ds(*) reuse"
+         call msg 'off'
+         Address ISPExec "Browse Dataset("report")"
+         "delete" report
+         Address ISPExec
+         return
+
+        /* -------------------------- *
+         * Build and Submit Reorg Job *
+         * -------------------------- */
+         Do_Reorg:
+         call build_job_card
+         drop t.0
+         t.4 = "//STEP1    EXEC PGM=SARDBASE,PARM='"cavdb"'"
+         t.5 = "//SYSPRINT DD SYSOUT=*"
+         t.6 = "//SYSIN    DD  *"
+         t.7 = "REORG ASYNCH"
+         t.0 = 7
+         function = "to do an asynchronous reorganization of",
+                    "the index file is to be performed",
+                    "The database can be actively used by",
+                    "others during the reorganization;",
+                    "however, the less database activity there",
+                    "is, the faster the REORG will run.",
+                    "Verify the success of this JOB upon",
+                    "completion."
+         call Submit_JCL
+         return
+
+        /* -------------- *
+         * Build Job Card *
+         * -------------- */
+         Build_Job_Card:
+         if jobclass <> null then
+            jclass = ",CLASS="jobclass
+         else jclass = null
+         t.1 = jobcard
+         t.2 = "//         MSGLEVEL=(1,1),NOTIFY="sysvar('sysuid')""jclass",",
+               ||"TIME=30"
+         t.3 = "//HOLD     OUTPUT JESDS=ALL,DEFAULT=Y,OUTDISP=(HOLD,HOLD)"
+         return
+
+        /* ------------------------------------------------------- *
+         * Allocate the Internal Reader DD and write the generated *
+         * JCL to the Internal Reader for execution.               *
+         * ------------------------------------------------------- */
+         Submit_JCL:
+         Address TSO
+         "Alloc f(cavxrdr) sysout(b) writer(intrdr)",
+            "Recfm(f) lrecl(80) blksize(80) reuse"
+         "Execio * diskw cavxrdr (finis stem t."
+         "Free f(cavxrdr)"
+         parse value t.1 with "//"jobname .
+         drop t.
+         Address ISPExec
+         zerrsm = "Submitted"
+         zerrlm = "Job" jobname "has been submitted",
+                  function
+         "Setmsg msg(isrz002)"
+         return

@@ -1,0 +1,36 @@
+)Attr Default(%+_)
+/* + type(text  ) intens(low )                   information only  */
+   _ type( input) intens(high) caps(off) just(left )
+   # type( input) intens(high) caps(off) just(left ) pad(_)
+   } type(output) intens(high) caps(off) just(left ) color(turq)
+   + type(text) intens(low) skip(on)
+   $ type( input) intens(high) caps(on ) just(left ) pad(_)
+   % type(text) intens(high)
+   ~ type(text) intens(high) color(blue) hilite(reverse)
+   @ type(text) intens(high) color(blue)
+)Body Expand(\\)
+%-\-\- ~OnCall Scheduling Tool% -\-\-
+%Command ===>_zcmd
++
+  @Report name:}ocgroup                                                  +
+  @Start Date: _ocdate  +   format mm/dd/yy
+  @Duration:   _ocdur+      Number of cycles to schedule
+  @Cycle:      _occyc+      days per oncall cycle (e.g. 7 for one week)
++
+       @Group Members+(I:Insert D:Delete)
+  +Sel+Order+Name                +E-Mail
+      +Office         +Cell           +Pager          +Home
++
+)Model
+  $z+ $z +  _z                   #z                                            +
+      $z              $z              $z              $z                 +
+)Init
+ .cursor = zcmd
+ .zvars = '(zsel ocseq ocname ocmail ocpo ocpc ocpg ocph)'
+ &zsel = &z
+)Proc
+ ver (&ocdate,nb,pict,nn/nn/nn)
+ ver (&ocdur,nb,num)
+ ver (&occyc,nb,num)
+ ver (&zsel,list,I,D)
+)End

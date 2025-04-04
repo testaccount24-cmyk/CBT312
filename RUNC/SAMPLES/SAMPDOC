@@ -1,0 +1,74 @@
+* --------------------------------------------------- *
+* This is a sample member that demonstrates using the *
+* documentation popup statements.                     *
+*                                                     *
+* Use the command RUNC -ALL to see how this works.    *
+*                                                     *
+* --------------------------------------------------- *
+
+* First the TSO Status command
+ST
+
+* Now some documentation for a popup
+<DOC>
+<title>First Doc Pop-Up
+After viewing the instructions in the pop-up the following
+commands will be issued:
+
+Display XCF      To display the current XCF members
+Dispaly SMF      To display the current SMF datasets
+
+Pressing Enter will not close the pop-up.
+
+PF3 will close the pop-up and continue to the next commands.
+
+Entering CANCEL in the command field will close the popup and
+exit further RUNC processing.
+</DOC>
+cons d xcf
+cons d smf
+<doc>
+<title>A few more examples
+This documentation popup demonstates all the supported symbolics:
+
+The symbolics used are:
+
+   USA Date (mm/dd/yy)                &&DATE      &DATE
+   2 digit Day of Month               &&DD        &DD
+   Day of year (e.g. 001)             &&DOY       &DOY
+   European Date (dd/mm/yy)           &&EDATE     &EDATE
+   Hours and Minutes                  &&HHMM      &HHMM
+   Julian Date (e.g. 16001)           &&JDATE     &JDATE
+   Julian Date                        &&JULIAN    &JULIAN
+   Active LPAR Name                   &&LPAR      &LPAR
+   2 digit Month                      &&MM        &MM
+   Month (e.g. January)               &&MONTH     &MONTH
+   Ordered Date (yy/mm/dd)            &&ODATE     &ODATE
+   Current TSO Prefix                 &&PREFIX    &PREFIX
+   Current dataset                    &&RDSN      &RDSN
+   Current member                     &&RMBR      &RMBR
+   Current member                     &&RMEM      &RMEM
+   Standard Date (yyyymmdd)           &&SDATE     &SDATE
+   Active SMFID for the LPAR          &&SMFID     &SMFID
+   Active LPAR Name                   &&SYSNAME   &SYSNAME
+   1 Character System Name            &&SYSID     &SYSID
+   Active SYSPLEX Name                &&SYSPLEX   &SYSPLEX
+   Current TSO Prefix                 &&SYSPREF   &SYSPREF
+   Active SMFID for the LPAR          &&SYSSMFID  &SYSSMFID
+   Current userid                     &&SYSUID    &SYSUID
+   USA Date (mm/dd/yy)                &&UDATE     &UDATE
+   Current userid                     &&USERID    &USERID
+   Current userid lower case          &&USERIDL   &USERIDL
+   Day of Week (e.g. Monday)          &&WEEKDAY   &WEEKDAY
+   2 digit Year                       &&YY        &YY
+   4 digit Year                       &&YYYY      &YYYY
+</doc>
+<doc>
+<title>A few more examples
+This documentation popup demonstates all the supported symbolics:
+
+The symbolics used are:
+
+   USA Date (mm/dd/yy)                &&DATE      &DATE
+</doc>
+ekko &&date is &date

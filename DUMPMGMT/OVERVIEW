@@ -1,0 +1,37 @@
+This member provides an overview of the various pieces of this package.
+
+DMPIPLCK - is the rexx exec that is invoked by the started task
+SVCDMPCK which is run on each lpar after an IPL.  It checks for any
+dumps which are not in the MVS.DUMPLOG and adds them using the
+DUMPLOGP exec.
+
+DUMPINDX - is an ISPF dialog to manage the system dumps.  It reads the
+dumps from the MVS.DUMPLOG and displays a table from which the dump
+can be deleted, flagged for ownership so it won't be deleted, or have
+IPCS invoked on it.
+
+DUMPLOGP - is invoked by the SDMPLOG exec and e-mails the specified
+individuals about the dump
+
+DUMPLOGR - a short exec to invoke browse on MVS.DUMPLOG
+
+DUMPLOGX - run daily by auto/ops (23:00 I believe) to delete obsolete
+dumps (those flagged are never deleted).  Dumps which are in the
+catalog but no in the dumplog are deleted.  Dumps which are in the
+dumplog but not in the catalog are removed from the table.  Dumps
+which exceed 30 days of age are deleted.  Certain other dumps are
+deleted after 5 days.
+
+SDMPLOG - is invoked by started task SVCDMPLG with the dump dsname passed.  It e
+and updates the MVS.DUMPLOG with that information.  It then invokes DUMPLOGP to
+
+Proc SVCDMPCP invokes a local program called IPCSCOPY whenever there
+is a SYS1.DUMPxx dataset created.  AO determines when a dump occurs by
+trapping the message and if it is a SYS1.DUMPxx invokes this started
+task.  This situation can occur if the SMS pool is full and the
+dynamically allocated system dump can't be allocated.  The utility
+will read the dump, dynamically create a dataset name in the format of
+MVS.DUMP..... (following our current naming conventions) and updates
+the MVS.DUMPLOG.  It builds the TSO command to invoke the DUMPLOGP for
+notification and passes that to step 2 of the job which is a batch tmp
+step.

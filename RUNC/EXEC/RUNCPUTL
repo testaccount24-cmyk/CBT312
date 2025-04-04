@@ -1,0 +1,42 @@
+/* --------------------  rexx procedure  -------------------- *
+ | Name:      RUNCPUTL                                        |
+ |                                                            |
+ | Function:  Used by RUNC to issue the rexx say command      |
+ |            so that it can be outtrapped and thus           |
+ |            reported in the trap report.                    |
+ |                                                            |
+ | Syntax:    %runcputl any text                              |
+ |                                                            |
+ | Notes:     leading blanks will be lost in the text         |
+ |                                                            |
+ |            leading and trailing quotes will be removed     |
+ |            to allow leading blanks                         |
+ |                                                            |
+ | Author:    Lionel B. Dyck                                  |
+ |                                                            |
+ | History:  (most recent on top)                             |
+ |            12/08/16 - Can be replaced by the EKKO command  |
+ |                       source and load module provided in   |
+ |                       the RUNC package                     |
+ |            11/05/16 - Creation                             |
+ |                                                            |
+ * ---------------------------------------------------------- */
+parse arg data
+if left(data,1) = "'" then call clean_ql
+if left(data,1) = '"' then call clean_ql
+if right(data,1) = "'" then call clean_qt
+if right(data,1) = '"' then call clean_qt
+
+say data
+exit
+
+/* ------------------------------- *
+ | Clean_QL removes leading quote  |
+ | Clean_QT removes trailing quote |
+ * ------------------------------- */
+Clean_QL:
+  data = substr(data,2)
+  return
+Clean_QT:
+  data = left(data,length(data)-1)
+  return

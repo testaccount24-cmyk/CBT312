@@ -1,0 +1,36 @@
+)Attr Default(%+_)
+   ! type( input) intens(high) caps(on ) just(left ) pad('_')
+   ¬ type(output) intens(low ) caps(off) just(asis ) pad(' ')
+   } type(output) intens(low ) caps(off) just(right) pad(' ')
+   ` type(text) intens(high) caps(off) just(asis ) color(yellow)
+   # type(output) intens(high) caps(off) just(asis ) color(blue)
+   @ type(output) intens(high) caps(on) just(left ) color(yellow)
+   $ type(text  ) intens(high) caps(off) just(asis ) color(turq)
+   { type(output) intens(high) caps(off) just(asis ) color(yellow)
+   ~ type(text) intens(high) color(blue) hilite(reverse)
+)Body Expand(//)
+%-/-/-~CAView Report Extraction Table@ver #cavdb                  %-/-/-
+%Command ===>_zcmd                                 / /%Scroll ===>_amt +
+%            #selinfo
+$Commands:`   Find xx `Refresh `Sort
+$Selections:` B:Browse C:Copy DD:Delete L:Load M:Mail P:Print S:Browse
+`             T:Transfer V:View
++
+%Sel Act Report-ID    Jobname   JobID Gen  Loc  ArchDate ArchTime    Lines Xcode
++
+)Model
+!z +¬z  ¬z           ¬z       ¬z     ¬z   ¬z   ¬z       ¬z       }z       +¬z
+)Init
+  .help = cavxtrth
+  .ZVARS = '(sel stat rpt jname jid gen DLoc archdate archtime prtlines +
+            xcode)'
+  &amt = CSR
+)Reinit
+)Proc
+                                  /* Process )BODY fields here      */
+  If (&ztdsels ¬= 0000)           /* If user selected some rows ... */
+                                  /* ... process )MODEL fields here */
+ if (&sel = S)
+     &sel = B
+ ver (&sel,list,B,C,DD,L,M,P,T,V)
+)End

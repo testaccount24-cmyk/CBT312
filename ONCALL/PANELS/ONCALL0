@@ -1,0 +1,41 @@
+)Attr Default(%+_)
+/* + type(text  ) intens(low )                   information only  */
+   _ type( input) intens(high) caps(off) just(left )
+   # type( input) intens(high) caps(off) just(left ) pad(_)
+   + type(text) intens(low) skip(on)
+   $ type( input) intens(high) caps(on ) just(left ) pad(_)
+   % type(text) intens(high)
+   ~ type(text) intens(high) color(blue) hilite(reverse)
+   @ type(text) intens(high) color(blue)
+)Body Expand(\\)
+%-\-\- ~OnCall Scheduling Tool% -\-\-
+%Command ===>_zcmd
++
+  @Report Name:    #ocgroup                                                  +
+  @Group Initials: #ocgi    +  Will be used as the table name
+  @Table Dataset:  $octbl                                                +
+  @Primary Backup: #ocb+       Yes if Primary does Backup duty the prior week
+  @Report Type:    #z+         1 = Report only
+                              +2 = Report, e-mail, and calendar
+                              +3 = Report e-mail only to you
+                              +4 = Report e-mail and calendar only to you
+  @Your E-Mail:    #ocgmail                                                  +
+  +                 required if report option is 2 or 3
++
++NOTE: It is recommended that you use report option 1 until you are
++      happy with the generated schedule before using report option 2.
++
+)Init
+ .cursor = zcmd
+ .zvars = '(ocr)'
+ &ocb = trans(trunc(&ocb,1) y,Yes n,No Y,Yes N,No &z,Yes *,*)
+)Proc
+ ver (&ocgroup,nb)
+ ver (&ocgi,nb)
+ ver (&octbl,nb,dsname)
+ &ocb = trans(trunc(&ocb,1) y,Yes n,No Y,Yes N,No &z,Yes *,*)
+ ver (&ocb,nb,list,Yes,No)
+ ver (&ocr,nb,range,1,4)
+ if (&ocr > 2)
+    ver(&ocgmail,nb)
+)End

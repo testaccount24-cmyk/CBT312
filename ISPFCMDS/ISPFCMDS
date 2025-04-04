@@ -1,0 +1,237 @@
+        /* --------------------  rexx procedure  -------------------- */
+         ver = "1.02"
+        /* Name:      ispfcmds                                        *
+         *                                                            *
+         * Function:  Add user ispf commands to an active ispf        *
+         *            command table.                                  *
+         *                                                            *
+         *            It is recommended that all commands be added    *
+         *            to the User command table if it is available.   *
+         *                                                            *
+         *            This is intended to be called from a user exec  *
+         *            to add their own commands to the specified      *
+         *            ispf command table.                             *
+         *                                                            *
+         *            If the command to be added already exists then  *
+         *            the existing command entry in the table will    *
+         *            be replaced with the new command.               *
+         *                                                            *
+         * Syntax:    %ispfcmds table ispf-command-table-entry        *
+         *                                                            *
+         *            if table = * then default to (in order)         *
+         *               User table                                   *
+         *               Site table                                   *
+         *               Current Applid Table or ISPCMDS              *
+         *                                                            *
+         *            if table = USER then the user table is updated  *
+         *            if table = SITE then the site table is updated  *
+         *            if table = ISPF then the ISPCMDS Table is       *
+         *                       updated                              *
+         *                                                            *
+         *            The ispf-command-table-entry is in the format:  *
+         *                                                            *
+         *            verb trunc action                               *
+         *                                                            *
+         *            each separated by a space                       *
+         *                                                            *
+         * Usage:     Sample usage:                                   *
+         *                                                            *
+         *            from an exec:                                   *
+         *            "%ispfcmds * dd 0 select pgm(isrddn)"           *
+         *            "%ispfcmds user dd 0 select pgm(isrddn)"        *
+         *            "%ispfcmds * ee 0 edit dataset(&zparm)"         *
+         *            "%ispfcmds user ed 0 select cmd(%epdf &zparm)"  *
+         *            "%ispfcmds user fastpath select cmd(%fastpath)" *
+         *                                                            *
+         * Author:    Lionel B. Dyck                                  *
+         *            Kaiser Permanente Information Technology        *
+         *            Walnut Creek, CA 94598                          *
+         *            (925) 926-5332                                  *
+         *            Internet: lionel.b.dyck@kp.org                  *
+         *                                                            *
+         * History:                                                   *
+         *            05/22/02 - version 1.02                         *
+         *                     - return tbadd/tbput return code       *
+         *            05/21/02 - version 1.01                         *
+         *                     - Support * as default table name      *
+         *                     - Improve error messages & comments    *
+         *                     - If no applid cmd table use ISPCMDS   *
+         *            05/19/02 - Set as version 1.00                  *
+         *            05/19/02 - Clean up                             *
+         *            05/16/02 - Creation                             *
+         *                                                            *
+         * ---------------------------------------------------------- */
+         parse arg input
+
+        /* ------------------------ *
+         * Get current command name *
+         * ------------------------ */
+         xcmd  = sysvar("sysicmd")
+
+        /* ------------------------- *
+         * Verify that we have input *
+         * ------------------------- */
+         if length(input) = 0 then do
+            say "Error. No parameters specified."
+            call do_syntax
+            end
+
+        /* --------------------------- *
+         * Now parse the input for use *
+         * --------------------------- */
+         parse value input with table cmd
+         parse value cmd with tctverb tcttrunc tctact
+         tctverb = translate(tctverb)
+         tctact  = translate(tctact)
+
+        /* --------------------------------------- *
+         * Validate the command as much as we can. *
+         * 1) verb required                        *
+         * 2) truncation must be numeric           *
+         * 3) action required                      *
+         * --------------------------------------- */
+         Select
+           When length(tctverb) = 0 then do
+                say "Error:",
+                           "Invalid syntax. - Verb"
+                call do_syntax
+                end
+           When length(tcttrunc) = 0 then do
+                say "Error:",
+                           "Invalid syntax. - Truncation"
+                call do_syntax
+                end
+           When length(tctact) = 0 then do
+                say "Error:",
+                           "Invalid syntax. - Action"
+                call do_syntax
+                end
+           Otherwise nop
+           End
+         If datatype(tcttrunc) \= "NUM" then do
+            say "Error: truncation value is not numeric."
+            call do_syntax
+            end
+
+        /* ---------------------- *
+         * Setup ISPF Environment *
+         * ---------------------- */
+         Address ISPExec
+         "Control Errors Return"
+
+        /* ---------------------------------------------- *
+         * Determine if an Application ID Table is active *
+         * ---------------------------------------------- */
+         "Vget (zapplid)"
+         "TBQuery" zapplid"CMDS"
+            if rc > 0 then zapplid = ""
+
+        /* ------------------------ *
+         * Test the table parameter *
+         * ------------------------ */
+         table = translate(strip(table))
+         Select
+            When length(table) = 0 then do
+                    say "Error: ISPF Command table is missing."
+                    call do_syntax
+                    end
+            When table = "*" then do
+                 Address ISPExec "Vget (zsctpref zuctpref)"
+                 Select
+                   When zuctpref \= "" then
+                        table = zuctpref"CMDS"
+                   When zsctpref \= "" then
+                        table = zsctpref"CMDS"
+                   Otherwise
+                        if zapplid = ""
+                           then table = "ISPCMDS"
+                           else table = zapplid"CMDS"
+                   end
+                 end
+            When table = "SITE" then do
+                 Address ISPExec ,
+                     "Vget (zsctpref)"
+                 table = zsctpref"CMDS"
+                 end
+            When table = "ISPF" then do
+                 Address ISPExec ,
+                     "Vget (zsctpref)"
+                 table = "ISPCMDS"
+                 end
+            When table = "USER" then do
+                 Address ISPExec ,
+                     "Vget (zuctpref)"
+                 table = zuctpref"CMDS"
+                 end
+            Otherwise
+                 if right(table,4) \= "CMDS" then do
+                    say "Error: ISPF Command table specified is not valid" table
+                    say "       It must end in CMDS."
+                    say "       Exiting now....."
+                    exit 8
+                    end
+            end
+
+        /* ------------------------------------------ *
+         * Validate that the table exists and is open *
+         * ------------------------------------------ */
+         "TBQuery" table
+         if rc > 0 then do
+            say "Error: ISPF Command table specified is not valid" table
+            say "      " zerrsm
+            say "       Exiting now....."
+            exit 8
+            end
+
+        /* ------------------------------------------------------ *
+         * Test to see if the requested command is already in the *
+         * table.                                                 *
+         *                                                        *
+         * If so then set the action to TBPUT to replace.         *
+         * Otherwise set action to TBADD to add.                  *
+         * ------------------------------------------------------ */
+         act = "TBAdd"
+         "TBTop" table
+         do until rc > 0
+            "TBSkip" table
+            if zctverb = tctverb then do
+               act = "TBPut"
+               leave
+               end
+            end
+
+        /* ---------------------------- *
+         * Add the command to the table *
+         * ---------------------------- */
+         zctverb  = tctverb
+         zcttrunc = tcttrunc
+         zctact   = tctact
+         zctdesc = "Dynamically added" date() time()
+         act table
+         erc = rc
+         Exit erc
+
+        /* ----------------------- *
+         * Display Correct Syntax: *
+         * ----------------------- */
+         Do_Syntax:
+         say " "
+         say xcmd "version" ver
+         say " "
+         say "The correct syntax is:"
+         say " "
+         say "%"xcmd "table ( verb truncation action"
+         say " "
+         say "where table may be:"
+         say "      * for the default table"
+         say "      or User or Site for the User or Site tables"
+         say "      or ISPF for the System ISPCMDS table"
+         say "      or a valid table name (ending in CMDS)"
+         say "      ( is required"
+         say "      verb is the 1 to 8 character command"
+         say "      trunction is 0 for all or the number of"
+         say "        characters in the command required"
+         say "      action is the ISPF command."
+         say " "
+         say "Exiting ....."
+         Exit 8

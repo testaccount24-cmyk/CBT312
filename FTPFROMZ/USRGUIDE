@@ -1,0 +1,219 @@
+Users Guide for FTPFromZ
+Version 1.0                May 20, 2004
+
+By.  Lionel B. Dyck
+     Kaiser Permanente Information Technology
+     25 N. Via Monte Ave
+     Walnut Creek, California 94598
+     (925) 926-5332
+     Internet: Lionel.B.Dyck@kp.org
+
+=============================================================================
+Overview
+
+FTPFromZ is a TSO command written in REXX designed to provide a simple
+command line interface to the z/OS FTP service. Using FTPFromZ the user
+can initiate the file transfer of a data set from the z/OS system to
+another z/OS system or any other system which is running a FTP Server.
+
+With FTPFromZ both sequential data sets and members of partitioned data
+sets can be transferred easily. For partitioned data sets (PDS)
+transfers the user can specify one or more members with or without
+member name masking (e.g. member*). When sending from z/OS to a non-z/OS
+system the user can specify either text mode or binary mode transfer of
+the data while for z/OS transfers the transfer will occur in EBCDIC,
+which supports any z/OS data (text or binary).
+
+FTPFromZ can be executed while logged into TSO, under ISPF, or in batch
+using the batch Terminal Monitor Program (TMP).
+
+=============================================================================
+Syntax
+
+The syntax of the command is:
+
+    %ftpfromz options
+
+Where the supported options are:
+
+DIR
+    Defines the remote directory into which the transferred data set
+    will be stored.
+
+    e.g. DIR \fromz\work
+
+DSN
+    Defines the z/OS data set name that is to be transferred. The
+    data set may be either a sequential data set or a partitioned
+    data set (PDS), with or without a member name. If no member
+    name is specified then the MEM option must be used to define
+    the member(s) to transfer. Generation data group (gdg) data sets
+    are supported.
+
+    e.g. DSN hlq.test.report
+         DSN hlq.test.pds
+         DSN hlq.test.pds(mem)
+         DSN hlq.test.*
+         DSN hlq.test(-1)
+
+    Note if masking is used (*) then only sequential data sets are
+    supported.
+
+FILE
+    Remote file name to be used in place of the source data set name
+    * default is to use the DSN value
+
+    e.g. FILE test.report
+
+    Note: if the target data set is a GDG then the base GDG must already
+          be defined.
+
+HOST
+    Remote host name to receive the FTP
+
+    e.g. HOST your.local.server
+
+MEM
+    Member or (Members) of the PDS to FTP
+
+    e.g. MEM member
+         MEM member*
+         MEM (mema memb memc)
+         MEM (mema* memc*)
+
+MEMSUF
+    Defines a file suffix for a member (e.g. .txt).
+    Does not work if member masking is used.
+
+NETRC
+    FTP NETRC file with hostname, userid, and
+        password
+    * required if USERID and PASSWORD keywords
+      are not specified in the command
+    * NETRC is more secure as the data set can
+      be restricted by security access rules
+    * NETRC file format is:
+      MACHINE hostname LOGIN userid PASSWORD password
+
+    e.g. NETRC data-set-name
+
+NETRCDD
+    References a pre-allocated DD in the job that is
+    a NETRC file.
+    * NETRC file format is:
+      MACHINE hostname LOGIN userid PASSWORD password
+
+    e.g. NETRCDD NETRC
+
+    *** the only allowed ddname is NETRC ***
+
+NOPASSWORD
+    Will generate a null/blank password
+
+PASSWORD
+    Password for remote userid
+
+    e.g. PASSWORD xy89124
+
+POSTFTP
+   Defines one or more FTP commands to be executed
+   after the PUT of the requested file.
+   Separate commands with a comma and enclose
+   in parenthesis if multiple or blanks.
+
+   e.g POSTFTP (ls -la)
+
+PREFTP
+   Defines one or more FTP commands to be executed
+   prior to the PUT of the requested file.
+   Separate commands with a comma and enclose
+   in parenthesis if multiple or blanks.
+
+   e.g PREFTP (quote site recfm=fb lrecl=80)
+
+TYPE
+    Type of FTP
+    BIN or Binary if sending to a non z/OS host
+        in binary format
+    TEXT or ASC if sending to a non z/OS host
+        in plain text format
+    MVS or ZOS if sending to a z/OS host
+
+    e.g. TYPE MVS
+
+UNIQUE
+    Used to force a unique filename at the remote site.
+
+USERID
+    Userid for remote host
+    * if anonymous then the password is generated
+
+    e.g USERID yourid
+
+=============================================================================
+Required Keywords:
+
+   Host
+   DSN
+   Userid
+   Netrc
+   NetrcDD
+
+=============================================================================
+Sample Batch Usage:
+
+Example 1:
+
+The following is a sample batch Terminal Monitor Program (TMP) that
+demonstrates executing the FTPFromZ in batch to send a sequential data
+set from one z/OS host to another.  The NETRCDD option is used and
+references the NETRC in the job stream.
+
+    //jobname  JOB  ...,
+    //             MSGLEVEL=(1,1),MSGCLASS=X
+    //TSOB     EXEC PGM=IKJEFT1B
+    //SYSPRINT DD  SYSOUT=*
+    //SYSTSPRT DD  SYSOUT=*
+    //SYSEXEC  DD  DISP=SHR,DSN=hlq.rexx.library
+    //NETRC    DD *
+    MACHINE zos.host.name LOGIN userid PASSWORD password
+    //SYSTSIN  DD  *
+    %ftpfromz dsn test.html +
+        host zos.host.name +
+        netrcdd +
+        type mvs +
+        file test.html2
+
+Example 2:
+
+The following is a sample batch Terminal Monitor Program (TMP) that
+demonstrates executing the FTPFromZ in batch to send a two partitioned
+data sets from one z/OS host to another.  The NETRCDD option is used and
+references the NETRC in the job stream.
+
+    //jobname  JOB  ...,
+    //             MSGLEVEL=(1,1),MSGCLASS=X
+    //TSOB     EXEC PGM=IKJEFT1B
+    //SYSPRINT DD  SYSOUT=*
+    //SYSTSPRT DD  SYSOUT=*
+    //SYSEXEC  DD  DISP=SHR,DSN=hlq.rexx.library
+    //NETRC    DD *
+    MACHINE zos.host.name LOGIN userid PASSWORD password
+    //SYSTSIN  DD  *
+    %ftpfromz dsn test.exec host zos.host.name +
+        preftp (quote site recfm=fb lrecl=80,mkdir test.exec) +
+        mem * +
+        netrcdd netrc +
+        type mvs
+    %ftpfromz dsn test.panels host zos.host.name +
+        preftp (quote site recfm=fb lrecl=80,mkdir test.panels) +
+        mem * +
+        netrcdd netrc +
+        type mvs
+
+Example 3:
+
+Sample command to send 2 members to a non-z/OS server:
+
+     %ftpfromz dsn test.pds host 10.233.107.93 userid uid    +
+     memsuf .txt type asc password pwd dir t mem (mem1 mem2)

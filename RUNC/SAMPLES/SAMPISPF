@@ -1,0 +1,62 @@
+* -------------------- *
+* Sample ISPF commands *
+* -------------------- *
+* ----------------------------------------------- *
+* View member SAMPZOS in this dataset and use     *
+* the ONLY edit/view command to restrict the view *
+* to just those records with PDSE in them.        *
+* ----------------------------------------------- *
+view member(sampzos) macro(only) parm(pdse)
+
+* ------------------- *
+* Browse this dataset *
+* ------------------- *
+browse dataset('&rdsn')
+
+* ------------------------------------- *
+* Browse member SAMPTSO in this dataset *
+* ------------------------------------- *
+browse member(samptso)
+
+* ----------------------------------------------- *
+* Demonstrate the use of libdef within RUNC       *
+* to libdef this dataset as an ispf panel library *
+* ----------------------------------------------- *
+ispexec libdef ispplib dataset id('&rdsn')
+
+* --------------------------------------- *
+* Run the ISPF ISPLIBD command to display *
+* the active LIBDEF's for DD ISPPLIB      *
+* --------------------------------------- *
+select pgm(isplls) parm(ispplib)
+
+* ---------------------------- *
+* Now free the previous LIBDEF *
+* ---------------------------- *
+ispexec libdef ispplib
+
+* ------------------------------------------------------- *
+* Sample to demonstrate using several of the ISPF and TSO *
+* capabilities of RUNC by using ALTLIB and LIBDEF and     *
+* then SELECT to invoke the PDSEGEN ISPF dialog.          *
+* ------------------------------------------------------- *
+<start>
+<doc>
+This demonstration is intended to be run using RUNC and
+selecting the <start> record.
+
+This will use the TSO Altlib command to define the PDSEGEN
+REXX library and then use the ISPF LIBDEF commands to define
+the PDSEGEN Load and Panel libraries.
+</doc>
+
+Altlib Activate application(exec) dataset('t311lbd.pdsegen.exec')
+ISPExec Libdef ISPLLIB Dataset ID('t311lbd.pdsegen.load')
+ISPExec Libdef ISPPLIB Dataset ID('t311lbd.pdsegen.panels')
+
+ISPExec Select cmd(%pdsegen)
+
+Altlib Deactivate application(exec)
+ISPExec Libdef ISPLLIB
+ISPExec Libdef ISPPLIB
+<end>

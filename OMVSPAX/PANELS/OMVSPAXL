@@ -1,0 +1,15 @@
+)Attr Default(%+_)
+   $ type( input) intens(high) caps(off) just(left ) hilite(uscore)
+   @ type( input) intens(high) caps(on ) just(left ) hilite(uscore)
+   ~ type(text) intens(high) color(green ) hilite(reverse)
+)Body  Expand(\\)
+%-\-\-~OMVS pax File List%-\-\-
+%Command ===>_zcmd
+%
+%z/OS Backup Dataset:@zobkdsn                                       +
++
++Specify the z/OS pax backup file to list the contents of.
+)Init
+)Proc
+ ver (&zobkdsn,nb,dsname)
+)End

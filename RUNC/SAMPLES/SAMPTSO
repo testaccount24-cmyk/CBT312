@@ -1,0 +1,60 @@
+* list current allocations (status history sysnames)
+lista sta hi sys
+
+* listd dataset
+listd +
+    &dataset
+<exit 4>
+
+* listd dataset and members
+listd &dataset mem
+
+* ----------------------------------------------------- *
+* Demonstrate the use of the ALTLIB command under RUNC. *
+*                                                       *
+* Select the next 4 commands using SS on the 1st ALTLIB *
+* and then SS on the last ALTLIB. Then invoke RUNC on   *
+* the command line.                                     *
+* ----------------------------------------------------- *
+ALTLIB ACTIVATE APPLICATION(exec) DATASET('&rdsn')
+%testcmd
+Altlib display
+ALTLIB DEACTIVATE APPLICATION(exec)
+
+* Allocate a FB PDSE
+alloc ds(&pdsedsn) new spa(&prim,&sec) tr +
+   recfm(f b) lrecl(&lrecl) blksize(0) +
+   dsntype(library,2) maxgens(&maxgen) dsorg(po)
+
+* Allocate a VB PDSE
+alloc ds(&pdsedsn) new spa(&prim,&sec) tr +
+   recfm(v b) lrecl(&lrecl) blksize(0) +
+   dsntype(library,2) maxgens(&maxgen) dsorg(po)
+
+* Execute ISPF ISRFIND
+exec 'sys1.sispexec(isrfind)' 'lmod(&lmod) noispf dd(linklst)'
+exec 'sys1.sispexec(isrfind)' 'lmod(&lmod) noispf dd(lpalst)'
+
+* Analysis of the PDSE environment
+sdsf v sms,pdse,analysis
+sdsf v sms,pdse1,analysis
+
+* Refresh the PDSE environment for a dataset
+sdsf v sms,pdse,refresh,dsn(&pdsedsn)
+sdsf v sms,pdse1,refresh,dsn(&pdsedsn)
+
+* invoke pds command to verify a pds
+pds &pdsdsn ver :
+
+* Sample to display job status
+sdsf st &job
+
+* invoke PDSEGEN as an ISPF application
+select cmd(%pdsegen &pdsedsn)
+
+* Backup sample.exec and sample.panels
+* ** requires the pdsegen application
+del sample.exec.j&jdate
+%pdsegbak sample.exec sample.exec.j&jdate backup
+del sample.panels.j&jdate
+%pdsegbak sample.panels sample.panels.j&jdate backup

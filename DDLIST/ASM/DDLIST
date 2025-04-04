@@ -1,0 +1,591 @@
+*---------------------------------------------------------------------*
+*                                                                     *
+* Name:        DDLIST                                                 *
+*                                                                     *
+* Function:    Return to REXX variables all dsnames for a ddname and  *
+*              if a member name is passed then only those dsnames.    *
+*                                                                     *
+* Syntax:      X=DDLIST(STEM,DDNAME)                                  *
+*              X=DDLIST(STEM,DDNAME,MEMBER)                           *
+*                                                                     *
+*              Where:                                                 *
+*                                                                     *
+*              STEM (with a period) into which the data set name      *
+*              is to be placed.                                       *
+*                                                                     *
+*              STEM.0 will contain a count                            *
+*                                                                     *
+*              DDNAME is the ddname whose data sets are to be         *
+*              placed into REXX variables.                            *
+*                                                                     *
+*              MEMBER is a specific member in a data set that must    *
+*              exist for the data set to be eligible to be placed     *
+*              into a variable.                                       *
+*                                                                     *
+*              Defaults:                                              *
+*                                                                     *
+*              STEM:     DDLIST.                                      *
+*              DDNAME:   none                                         *
+*              MEMBER:   none                                         *
+*                        If blank then all data sets will be used     *
+*                                                                     *
+*---------------------------------------------------------------------*
+* Link Edit information:     NON-REENTRANT                            *
+*---------------------------------------------------------------------*
+* Return Codes:                                                       *
+*                                                                     *
+*         0    processing has completed successfully                  *
+*         4    no data sets have the requested member                 *
+*         8    invalid parm                                           *
+*        12    DDNAME requested is not allocated                      *
+*        16    ARL is invalid returned by RDJFCB                      *
+*        20    no parm provided                                       *
+*        24    IRXEXCOM bad return code                               *
+*                                                                     *
+*---------------------------------------------------------------------*
+* Author:      Lionel B. Dyck                                         *
+*              Kaiser Permanente                                      *
+*              Walnut Creek, CA 94 98                                 *
+*              (925) 926-5332                                         *
+*              Internet: lionel.b.dyck@ncal.kaiperm.org               *
+*              AIM:   lbdyck                                          *
+*---------------------------------------------------------------------*
+* HISTORY:                                                            *
+*                                                                     *
+*        07/07/93  -  Updated to remove local macro dependencies      *
+*        07/20/90  -  Creation                                        *
+*                                                                     *
+*---------------------------------------------------------------------*
+DDLIST   CSECT
+DDLIST   AMODE 31
+*----------------------------------------------------------*
+*        Housekeeping occurs here                          *
+*----------------------------------------------------------*
+         STM   R14,R12,12(R13)     SAVE REGISTERS
+         LR    R12,R15             LOAD BASE REG
+         USING DDLIST,R12          INFORM ASSEMBLER
+         B     STARTIT
+         DC    CL8'DDLIST'
+         DC    C'-'
+         DC    CL8'&SYSDATE'       COMPILE DATE
+         DC    C'-'
+         DC    CL8'&SYSTIME'       COMPILE TIME
+STARTIT  DS    0H
+         SPACE 2
+         LA    R0,72+4000          get savearea plus workarea
+         GETMAIN R,LV=(0)
+         MVI   0(R1),X'00'         MOVE X'00' TO FIRST BYTE
+         LR    R2,R1               SAVE POINTER IN EVEN REG
+         LA    R4,1(R1)            SET RECEIVING POINTER
+         LR    R5,R0               SET RECEIVING LENGTH
+         BCTR  R5,R0               DECREMENT LENGTH
+         LA    R5,0(R5)            CLEAR HIGH ORDER BYTE
+         LA    R3,1                SET SENDING LENGTH
+         MVCL  R4,R2               INSTRUCTION PADS WITH X'00'
+         ST    R13,4(R1)           SAVE BACK CHAIN
+         ST    R1,8(R13)           SET FORWARD CHAIN
+         LR    R2,R1               SAVE NEW SAVEAREA ADDRESS
+         L     R15,16(R13)         RESTORE REG 15
+         ST    R0,16(R13)          SAVE SAVEAREA LENGTH
+         LM    R0,R1,20(R13)       RESTORE REGS USED IN GETMAIN
+         LR    R13,R2              SET SAVEAREA POINTER
+         USING WORK,R13            USING ON WORKAREA VIA R13
+         EJECT
+*---------------------------------------------------------------------*
+*        PROCESS THE INPUT PARAMETER LIST                             *
+*---------------------------------------------------------------------*
+         LR    R5,R0               -> ENVIRONMENT BLOCK
+         ST    R5,ENVBADDR         Save Environment Block Address
+         USING ENVBLOCK,R5
+         L     R5,ENVBLOCK_IRXEXTE -> EXTERNAL VECTOR TABLE
+         DROP  R5
+         USING IRXEXTE,R5
+         L     R5,IRXEXCOM         LOAD IRXEXCOM EPA
+         ST    R5,EXCOM            SAVE IRXEXCOM EPA
+         DROP  R5
+         LR    R4,R1               -> EFPL
+         USING EFPL,R4             ESTABLISH ADDRESSABILITY TO EFPL
+         L     R5,EFPLEVAL         -> EVAL BLOCK ADDRESS POINTER
+         L     R5,0(0,R5)          -> EVAL BLOCK
+         ST    R5,EVALADDR         SAVE IT'S ADDRESS
+         L     R4,EFPLARG          -> ARGUMENT LIST
+         DROP  R4
+*
+         LTR   R4,R4               ANY ARGUMENT LIST ?
+         BZ    EXIT20              YES
+*
+         MVC   STEM,BLANKS         INITIALIZE THE STEM VALUE
+         MVC   DDNAME,BLANKS       INITIALIZE THE DDNAME VALUE
+         MVC   MEMBER,BLANKS       INITIALIZE THE MEMBER VALUE
+*
+         USING ARGTABLE_ENTRY,R4   ESTABLISH ADDRESSABILITY TO ARG
+         CLC   =8X'FF',ARGTABLE_ARGSTRING_PTR  ANY REAL ARGUMENTS
+         BE    EXIT20              NO - SO EXIT
+         L     R2,ARGTABLE_ARGSTRING_PTR    -> ARGUMENT
+         L     R3,ARGTABLE_ARGSTRING_LENGTH LOAD LENGTH
+         BCTR  R3,R0               LESS 1 FOR MVC
+         EX    R3,MOVESTEM         MOVE THE STEM
+         LA    R1,STEM             -> Stem
+         AR    R1,R3               Get Stem suffix offset
+         LA    R1,1(R1)            Add back the 1 lost during mvc
+         ST    R1,STEMSUFX         Now Save the Offset
+         LA    R3,1(R3)            Add 1 to len            *LBD 07/90*
+         ST    R3,STEMLEN          and save length         *LBD 07/90*
+         LA    R4,ARGTABLE_NEXT
+*
+         CLC   =8X'FF',ARGTABLE_ARGSTRING_PTR  ANY DDNAME ?
+         BE    EXIT8               NO - SO EXIT
+         L     R2,ARGTABLE_ARGSTRING_PTR    -> ARGUMENT
+         L     R3,ARGTABLE_ARGSTRING_LENGTH LOAD LENGTH
+         BCTR  R3,R0               LESS 1 FOR MVC
+         LTR   R3,R3
+         BM    EXIT8               NO DDNAME
+         EX    R3,MOVEDDN          MOVE DDNAME
+         LA    R4,ARGTABLE_NEXT
+*
+         CLC   =8X'FF',ARGTABLE_ARGSTRING_PTR  ANY MEMBER ?
+         BE    START               NO - SO CONTINUE
+         L     R2,ARGTABLE_ARGSTRING_PTR    -> ARGUMENT
+         L     R3,ARGTABLE_ARGSTRING_LENGTH LOAD LENGTH
+         BCTR  R3,R0               LESS 1 FOR MVC
+         LTR   R3,R3
+         BM    START               MEMBER
+         EX    R3,MOVEMEM          MOVE MEMBER
+         ST    R3,MEMLNGTH         Save member length
+         EJECT
+*---------------------------------------------------------------------*
+*        INITIALIZE ALL WORK AREAS FROM OUR CONSTANTS                 *
+*---------------------------------------------------------------------*
+START    DS    0H
+         OC    DDNAME(8),BLANKS    INSURE UPPER CASE
+         OC    MEMBER(8),BLANKS    INSURE UPPER CASE
+         OC    STEM(80),BLANKS     INSURE UPPER CASE
+*
+         MVC   ARLSTRT(XRLL),MODLARL
+         MVC   WORKDCB(MODLDCBL),MODLDCB
+         MVC   WORKDDN(8),DDNAME   SET UP DDNAME
+         SR    R8,R8               ZERO STEM COUNTER
+         SPACE 2
+*---------------------------------------------------------------------*
+*        PROCESS THE JFCBS FOR THE SPECFIED DDNAME                    *
+*---------------------------------------------------------------------*
+* NOW READ THE JFCB FOR ALL DSNAMES
+         LA    R4,ARLSTRT
+         ST    R4,JFCBEXIT
+         MVI   JFCBEXIT,X'93'
+         LA    R4,JFCBEXIT
+         ST    R4,WORKDCB+36
+         LA    R2,WORKDCB
+         RDJFCB ((R2))
+         LTR   R15,R15             OK ?
+         BNZ   EXIT12              NO - GET OUT OF HERE
+*---------------------------------------------------------------------*
+*        RDJFCB IS NOW COMPLETE - NOW PROCESS ALL JFCBS               *
+*---------------------------------------------------------------------*
+         ICM   R9,X'F',ARLAREA    GET AND TEST ADDR OF ARL
+         BZ    EXIT16             NO ARL AVAILABLE
+         CLI   ARLRCODE,0         TEST RDJFCB REASON CODE
+         BNE   EXIT16             NOT AVAILABLE
+         LH    R3,ARLRTRVD        # OF RETRIEVED DATA SETS
+DSNLP    DS    0H
+         LA    R10,4(R9)
+         USING INFMJFCB,R10
+         MVC   RDSN,BLANKS
+         MVC   RDSN(44),JFCBDSNM   MOVE DSNAME
+         DROP  R10
+DOADD    DS    0H
+         CLI   MEMBER,C' '         ANY MEMBER ?
+         BE    DOADDIT             NO
+         BAS   R10,DOBLDL
+         LTR   R15,R15             MEMBER FOUND
+         BNZ   BCT                 NO - SKIP ADD
+DOADDIT  DS    0H
+         BAS   R10,ADD
+BCT      DS    0H
+         LH    R5,0(R9)           LOAD DATA LENGTH
+         AR    R9,R5              BUMP POINTER
+         BCT   R3,DSNLP           CONTINUE
+         SPACE 2
+*---------------------------------------------------------------------*
+*        ALL JFCBS PROCESSED - FREE ARL, SET STEM.0 AND EXIT          *
+*---------------------------------------------------------------------*
+         CVD   R8,DWK
+         MVC   COUNT(4),=X'F0202021'
+         ED    COUNT(4),DWK+6
+         MVC   RDSN,BLANKS
+         MVC   RDSN(3),COUNT+1
+         L     R4,STEMSUFX
+         MVC   0(3,R4),BLANKS
+         MVI   0(R4),C'0'          Set stem.0
+         OI    FLAG,X'10'          Set final flag
+         L     R1,STEMLEN          Load stem. length       *LBD 07/90*
+         LA    R1,1(R1)            Add 1                   *LBD 07/90*
+         ST    R1,STEMLENV         Save for SHVBLOCK       *LBD 07/90*
+         BAS   R10,SETVAR
+         L     R6,ARLAREA         -> GETMAIN'D ARL AREA
+         L     R7,ARLPOOL         LOAD POOL AND LEN
+         FREEMAIN R,A=(6),LV=(7)
+         B     EXIT0
+         EJECT
+*---------------------------------------------------------------------*
+*        1.  DETERMINE IF A MEMBER NAME WAS SPECIFIED AND IF SO DO    *
+*            A BLDL TO SEE IF THE DATA SET CONTAINS SAID MEMBER.      *
+*        2.  IF NO MEMBER SPECIFIED OR THE MEMBER WAS FOUND BY BLDL   *
+*            DO A STEM UPDATE                                         *
+*        3.  RETURN FOR THE NEXT DSNAME                               *
+*---------------------------------------------------------------------*
+ADD      DS    0H
+         CLI   MEMBER,C' '         ANY MEMBER ?
+         BE    SETVAR              NO - SKIP MEMBER BUILD
+         LA    R4,RDSN+45          -> END OF DSNAME
+FEND     DS    0H
+         CLI   0(R4),C' '          END OF DSNAME ?
+         BNE   GEND                YES - GOT IT
+         BCT   R4,FEND             NO - SEARCH FOR IT
+GEND     DS    0H                  AT LAST REAL CHARACTER OF DSNAME
+         LA    R4,1(R4)            -> FIRST BLANK
+         MVI   0(R4),C'('          MOVE IN LEFT PAREN
+         LA    R4,1(R4)            -> NEXT BLANK
+         L     R1,MEMLNGTH         Load MVC Length of Member
+         EX    R1,MVCMEM           And move it
+         LA    R4,1(R4)            NEXT CHARACTER
+         AR    R4,R1               Add MVC Length
+         MVI   0(R4),C')'          FILL IN END PAREN
+         LA    R4,1(R4)            Bump by 1
+         LA    R1,RDSN             -> Start of DSN
+         SR    R4,R1               Get DSN Length
+         ST    R4,DSNLNGTH         Save Length
+         EJECT
+SETVAR   DS    0H
+         MVC   EXCOM1,=CL8'IRXEXCOM'
+         XC    EXCOM2,EXCOM2
+         LA    R7,EXCOM4
+         USING SHVBLOCK,R7
+         TM    FLAG,X'10'          Final flag ?
+         BO    SETFINAL            Yes
+         AH    R8,=H'01'           ADD 1 TO COUNTER
+         CVD   R8,DWK
+         MVC   COUNT(4),=X'F0202021'
+         ED    COUNT(4),DWK+6
+*
+         L     R4,STEMSUFX
+         MVC   0(3,R4),BLANKS
+         LA    R1,COUNT+1         -> blank fill character
+         LA    R2,2               set loop counter
+CNTLP    DS    0H
+         CLI   0(R1),C'0'          is it higher than 0
+         BH    CNTMVC              yes - now move it
+         LA    R1,1(,R1)           no  - bump pointer
+         BCT   R2,CNTLP
+CNTMVC   DS    0H
+         EX    R2,MOVECNT
+         LA    R2,1(R2)            Bump count              *LBD 07/90*
+         A     R2,STEMLEN          Add current Stem length *LBD 07/90*
+         ST    R2,STEMLENV         And save it             *LBD 07/90*
+*
+SETFINAL DS    0H
+         XC    SHVNEXT,SHVNEXT     ZERO CHAIN POINTER
+         XC    SHVCODES,SHVCODES   ZERO CODES
+         MVI   SHVCODE,C'S'        SET VARIABLE USING Direct method
+         LA    R4,RDSN             ADDRESS OF STEM VALUE
+         ST    R4,SHVVALA          SAVE ADDRESS OF STEM VALUE
+         LA    R4,STEM             ADDRESS OF STEM NAME
+         ST    R4,SHVNAMA          SAVE ADDRESS OF STEM NAME
+         MVC   SHVNAML,STEMLENV    Set the stem.nnn length *LBD 07/90*
+*
+         CLI   MEMBER,C' '         Any Member ?
+         BE    NOMEM               Yes - skip this section
+         MVC   SHVVALL,DSNLNGTH    Set Length
+         B     DOEXCOM
+NOMEM    DS    0H
+         LA    R4,RDSN+45          -> end of dsname
+VALL     DS    0H
+         CLI   0(R4),C' '          Last character ?
+         BNE   SVALL               YES - SAVE LENGTH
+         BCT   R4,VALL             INCREMENT
+         B     VALL                AND KEEP LOOPING
+SVALL    DS    0H
+         LA    R4,1(R4)            Add 1 back
+         LA    R5,RDSN             -> RDSN START
+         SR    R4,R5               SUBTRACT FOR LENGTH
+         ST    R4,SHVVALL          SAVE LENGTH
+*
+DOEXCOM  DS    0H
+         OI    FLAG,X'01'          SET ADD FLAG
+         LA    R1,EXCOM1
+         ST    R1,EXADDR1
+         LA    R1,EXCOM2
+         ST    R1,EXADDR2
+         ST    R1,EXADDR3
+         LA    R1,EXCOM4
+         ST    R1,EXADDR4
+         OI    EXADDR4,X'80'       SET HIGH FLAG
+         LA    R1,EXADDR1
+         L     R15,EXCOM           -> IRXEXCOM MODULE
+         L     R0,ENVBADDR         -> Environment Block
+         BASR  R14,R15
+         BR    R10                 RETURN TO CALLER
+         DROP  R7
+         EJECT
+*---------------------------------------------------------------------*
+*        PERFORM THE BLDL OPERATION ON THE SPECIFIC DATA SET NAME     *
+*        TO DETERMINE IF THE REQUESTED MEMBER EXISTS.                 *
+*                                                                     *
+*        TO DO THIS:                                                  *
+*              1.  DYNAMICALLY ALLOCATE THE DATA SET                  *
+*              2.  OPEN THE DATA SET                                  *
+*              3.  DO THE BLDL                                        *
+*              4.  CLOSE AND FREE THE DATA SET                        *
+*              5.  RETURN TO THE CALLER WITH RESULT CODE              *
+*---------------------------------------------------------------------*
+DOBLDL   DS    0H
+         MVC   WORKDCB(MODLDCBL),MODLDCB
+         MVC   BLDLIST,MODBLIST
+         MVC   BLDLNAME,MEMBER     SET MEMBER FOR BLDL
+         MVC   S99RBPTR(DYNLEN),PRIMS99R
+         MVC   DYNDSN,RDSN         -> DSN
+         LA    R4,DYNDSNAM
+         ST    R4,TXTPTRS
+         LA    R4,DYNDDNAM
+         ST    R4,TXT2
+         LA    R4,DYNSTAT
+         ST    R4,TXT3
+         OI    TXT3,X'80'          SET LAST PARM FLAG
+         MVC   DSNLEN,=AL2(44)     SET ITS LENGTH
+         LA    R4,S99RB
+         ST    R4,S99RBPTR
+         OI    S99RBPTR,X'80'
+         LA    R4,TXTPTRS
+         ST    R4,S99TXTPP
+         LA    R1,S99RBPTR
+         SVC   99                  ** DO THE DYNAMIC ALLOCATION
+         MVC   WORKDDN,RETDDN      SETUP DDNAME INTO DCB
+         LA    R2,WORKDCB          -> DCB FOR OPEN
+         OPEN  ((R2))              DO THE OPEN
+         BLDL  (R2),BLDLIST        DO THE BLDL
+         LR    R7,R15              SAVE RC
+         CLOSE ((R2),FREE)         CLOSE AND FREE IT
+         LR    R15,R7              RESET RETURN CODE
+         BR    R10                 RETURN TO CALLER
+         EJECT
+*---------------------------------------------------------------------*
+*        ALL OF THE EXIT ROUTINES FOLLOW                              *
+*---------------------------------------------------------------------*
+SETRC    DS    0H
+         L     R11,EVALADDR
+         USING EVALBLOCK,R11
+         MVC   EVALBLOCK_EVLEN(4),=A(2)
+         MVC   EVALBLOCK_EVDATA(2),RC
+         DROP  R11
+         SPACE 2
+         LR    R1,R13              GET SAVEAREA ADDRESS
+         L     R13,4(R13)          GET BACK CHAIN POINTER
+         L     R0,16(R13)          GET SAVEAREA LENGTH
+         ST    R15,16(R13)         SAVE REGISTER 15 (RETCODE)
+         FREEMAIN R,LV=(0),A=(1)   FREE SAVEAREA
+         LM    R14,R12,12(R13)     RESTORE CALLERS REGS
+         LA    R15,0                                        $1/95$
+         BR    R14
+*---------------------------------------------------------------------*
+EXIT0    DS    0H
+         TM    FLAG,X'01'
+         BZ    EXIT4               NO ROWS ADDED TO THE TABLE
+         MVC   RC,=C'00'           SET RC TO ZERO
+         B     SETRC
+EXIT4    DS    0H
+         MVC   RC,=C'04'           SET RC
+         B     SETRC
+EXIT8    DS    0H
+         MVC   RC,=C'08'           SET RC
+         B     SETRC
+EXIT12   DS    0H
+         MVC   RC,=C'12'           SET RC
+         B     SETRC
+EXIT16   DS    0H
+         MVC   RC,=C'16'           SET RC
+         B     SETRC
+EXIT20   DS    0H
+         MVC   RC,=C'20'           SET RC
+         B     SETRC
+EXIT24   DS    0H
+         MVC   RC,=C'24'           SET RC
+         B     SETRC
+         EJECT
+*---------------------------------------------------------------------*
+*        EXECUTED INSTRUCTIONS                                        *
+*---------------------------------------------------------------------*
+MOVESTEM MVC   STEM(0),0(R2)       ** EXECUTED
+MOVEDDN  MVC   DDNAME(0),0(R2)     ** EXECUTED
+MOVEMEM  MVC   MEMBER(0),0(R2)     ** EXECUTED
+MOVECNT  MVC   0(0,R4),0(R1)       ** Executed
+MVCMEM   MVC   0(0,R4),MEMBER      ** Executed
+         SPACE 2
+*---------------------------------------------------------------------*
+*        LITERAL POOL                                                 *
+*---------------------------------------------------------------------*
+         LTORG
+         EJECT
+*---------------------------------------------------------------------*
+*        CONSTANTS                                                    *
+*---------------------------------------------------------------------*
+BLANKS   DC    CL80' '
+MODBLIST DS    0D                  BLDL MODEL LIST
+         DC    255X'00'
+         ORG   MODBLIST
+         DC    AL2(01)
+         DC    AL2(100)
+         DC    CL8' '
+         DC    XL3'0'
+         DC    X'0'
+         DC    X'0'
+         DC    X'0'
+         DC    XL62'0'
+         ORG   ,
+         EJECT
+DALDSNAM EQU   X'0002'
+DALSTATS EQU   X'0004'
+DALRTDDN EQU   X'0055'
+*
+PRIMS99R DS    0F
+         DC    X'80',AL3(0)        AL3(S99RB)
+*
+         DC    AL1(20),X'01',XL2'E000'   S99RB
+         DC    XL2'00'
+         DC    XL2'00'
+         DC    A(0)                A(TXTPTRS)
+         DC    F'0'
+         DC    XL4'00'
+*
+         DC    A(0)                TXTPTRS A(DYNDSNAM)
+         DC    A(0)                A(DYNDDNAM)
+         DC    X'80',AL3(0)        AL3(DYNSTAT)
+*
+         DC    AL2(DALDSNAM),AL2(1)  DYNDSNAM
+         DC    AL2(0)
+         DC    CL44' '
+         DC    AL2(DALRTDDN),AL2(1,8)  DYNDDNAM
+         DC    CL8' '
+         DC    AL2(DALSTATS),AL2(1,1)   DYNSTAT
+         DC    X'08'               SHR STATUS
+         EJECT
+MODLDCB  DCB   DSORG=PO,DDNAME=WORKDDN,MACRF=R,                        X
+               EXLST=0
+MODLDCBL EQU   *-MODLDCB
+         EJECT
+SMDLDCB  DCB   DSORG=PS,DDNAME=NISPFDD,MACRF=PM,RECFM=VB,LRECL=255,    X
+               BLKSIZE=6233
+SMDLDCBL EQU   *-SMDLDCB
+         EJECT
+MODLARL  IHAARL DSECT=NO,PREFIX=XRL
+XRLL     EQU   *-MODLARL
+         EJECT
+*---------------------------------------------------------------------*
+*        WORK AREA DSECTS                                             *
+*---------------------------------------------------------------------*
+WORK     DSECT
+SAVE     DS    18F
+DWK      DS    D
+EVALADDR DS    F
+EXCOM    DS    A                   ADDRESS OF IRXEXCOM LOAD MODULE
+ENVBADDR DS    A                   Environment Block Address
+DDNAME   DS    CL8                 PASSED DDNAME
+RDSN     DS    CL56                room for dsn(member)
+MEMBER   DS    CL8                 PASSED MEMBER NAME
+MEMLNGTH DS    F
+DSNLNGTH DS    F
+LEN      DS    H                   LENGTH OF DSN WITH OR W/O MEMBER
+STEM     DS    CL80
+STEMSUFX DS    F                   -> STEM SUFFIX LOCATION
+STEMLEN  DS    F                   Length of stem.
+STEMLENV DS    F                   Length of stem. plus suffix
+COUNT    DS    CL4                 COUNTER
+RC       DS    XL2                 RETURN CODE
+FLAG     DS    X                   STATUS FLAG
+*                                  00 IS NULL
+*                                  01 AT LEAST 1 ADD PERFORMED
+*                                  10 final flag
+         SPACE
+S99RBPTR DS    F
+*
+S99RB    DS    AL1(20),X'01',XL2'E000'
+S99ERROR DS    XL2'00'
+S99INFO  DS    XL2'00'
+S99TXTPP DS    A(0)                A(TXTPTRS)
+         DS    F'0'
+S99FLAG2 DS    XL4'00'
+*
+TXTPTRS  DS    A(0)                A(DYNDSNAM)
+TXT2     DS    A(0)                A(DYNDDNAM)
+TXT3     DS    X'80',AL3(0)        AL3(DYNSTAT)
+*
+DYNDSNAM DS    AL2(DALDSNAM),AL2(1)
+DSNLEN   DS    AL2(0)
+DYNDSN   DS    CL44' '
+DYNDDNAM DS    AL2(DALRTDDN),AL2(1,8)
+RETDDN   DS    CL8' '
+DYNSTAT  DS    AL2(DALSTATS),AL2(1,1)
+         DS    X'08'               SHR STATUS
+DYNLEN   EQU   *-S99RBPTR
+*
+         SPACE 1
+EXADDRS  DS    0D
+EXADDR1  DS    A(EXCOM1)
+EXADDR2  DS    A(EXCOM2)
+EXADDR3  DS    A(EXCOM2)
+EXADDR4  DS    A(EXCOM4)
+EXCOM1   DS    CL8                 CL8'IREXCOM'
+EXCOM2   DS    A                   0 (used for exaddr2/3)
+EXCOM4   DS    XL32                SHVBLOCK DATA (USING SHVBLOCK)
+         SPACE 1
+BLDLIST  DS    0D
+         DS    CL255
+         ORG   BLDLIST
+         DS    AL4
+BLDLNAME DS    CL8
+TTR      DS    XL3
+K        DS    X
+Z        DS    X
+C        DS    X
+USERDATA DS    XL62
+         ORG   ,
+         EJECT
+WORKDCB  DCB   DSORG=PO,DDNAME=WORKDDN,MACRF=R,                        X
+               EXLST=0
+WORKDDN  EQU   WORKDCB+40,8
+         SPACE 2
+JFCBEXIT DS    0H
+         DS    F
+         EJECT
+ARLSTRT  IHAARL DSECT=NO
+         EJECT
+         IEFJFCBN LIST=YES
+         EJECT
+         IRXEFPL DSECT=YES
+         EJECT
+         IRXARGTB
+         EJECT
+         IRXSHVB
+         EJECT
+         IRXEVALB
+         EJECT
+         IRXEXTE
+         EJECT
+         IRXENVB
+         EJECT
+R0       EQU   0
+R1       EQU   1
+R2       EQU   2
+R3       EQU   3
+R4       EQU   4
+R5       EQU   5
+R6       EQU   6
+R7       EQU   7
+R8       EQU   8
+R9       EQU   9
+R10      EQU   10
+R11      EQU   11
+R12      EQU   12
+R13      EQU   13
+R14      EQU   14
+R15      EQU   15
+         END   ,

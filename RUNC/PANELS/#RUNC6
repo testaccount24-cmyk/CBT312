@@ -1,0 +1,34 @@
+)ATTR DEFAULT(@+_)
+   @   TYPE(TEXT)   INTENS(HIGH) SKIP(ON)
+   +   TYPE(TEXT)   INTENS(LOW)  SKIP(ON) COLOR(GREEN)
+   _   TYPE(INPUT)  INTENS(HIGH) CAPS(ON) JUST(LEFT) HILITE(USCORE)
+)BODY EXPAND(\\)
+@Tutorial+-\-\-(@RUNC - Edit Macro+)-\-\-@Tutorial
+@Command ===>_ZCMD
++
++RUNC Usage Notes
++
++  21.@-L+ will log the messages to a dataset using the installation default.
++  22.@-LD+will log the messages to a sequential dataset with one per RUNC use.
++  23.@-LP+will log the messages to a partitioned dataset member with one
++      member per RUNC usage and one dataset per day.
++  23.@-LX+will turn off logging if logging was enabled by default for the
++      user via the@RUNC -O+command.
++  25. Use@RUNC -C+to bring up an ISPF dataset list (ISPF 3.4) of all the
++      RUNC Log datasets.
++  26. Or use the@%RUNCLOG+command directly to bring up an ISPF dataset list
++      of all the RUNC Log datasets.
++  27.@Browse Edit+and@View+on a@Dataset+allow the@VOLUME+keyword to specify
++      a specific volser instead of using the catalog.
++  28.@Edit+and@View+with@MEMBER(x)+will Edit or View the member in the current
++      dataset and volser.
++  29.@-BS+is a toggle to enable or disable prompting for RUNC supported
++      symbolics.
++
++ \ \ (press@ENTER+to continue) \ \
+)INIT
+ &SEP = '*, /*, //, //*'
+)PROC
+  &ZUP     = #RUNC5
+  &ZCONT   = #RUNC7
+)END

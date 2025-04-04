@@ -1,0 +1,20 @@
+)Attr Default(%+_)
+   $ type( input) intens(high) caps(off) just(left ) hilite(uscore)
+   @ type( input) intens(high) caps(on ) just(left ) hilite(uscore)
+   ~ type(text) intens(high) color(green ) hilite(reverse)
+)Body  Expand(\\)
+%-\-\-~OMVS Directory Restore%-\-\-
+%Command ===>_zcmd
+%
+%z/OS Backup Dataset:@zobkdsn                                       +
+%OMVS Directory     :$omvsdir                                                 +
++
++Specify the OMVS directory to be restored up using PAX from the z/OS dataset.
++
++Note that the target OMVS directory must exist for the restore to work.
++
+)Init
+)Proc
+ ver (&zobkdsn,nb,dsname)
+ ver (&omvsdir,nb)
+)End

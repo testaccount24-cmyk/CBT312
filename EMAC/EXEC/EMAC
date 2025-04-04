@@ -1,0 +1,833 @@
+/* --------------------  rexx procedure  -------------------- */
+ver = '2.3'
+/* Name:      emac                                            |
+ |                                                            |
+ | Function:  ISPF Edit Macro to display a selectable list    |
+ |            of ISPF Edit macros.                            |
+ |                                                            |
+ | Usage Notes: enter emac on ispf edit/view command line     |
+ |                                                            |
+ | Table Commands:                                            |
+ |                                                            |
+ |   Find xxxx      Finds 1st xxxx (repeat find does not work)|
+ |   Only xxxx      Display only rows with xxxx               |
+ |   Locate xxx     Locate 1st macro starting with xxx        |
+ |   macro-name     Execute the macro if it is in the table   |
+ |   Refresh                                                  |
+ |                                                            |
+ |   Find/Only find the string in either macro or description |
+ |                                                            |
+ | Row commands:                                              |
+ |                                                            |
+ |   S - Select row to execute                                |
+ |   H - Display tutorial                                     |
+ |                                                            |
+ | Dependencies:  file with macro names, help panel and       |
+ |                description                                 |
+ |                                                            |
+ |                *** see *custom* ***                        |
+ |                                                            |
+ | Notes:  1. The ISPF Panels used are inline at the bottom   |
+ |            of this code. Loaded using the loadispf routine |
+ |            that is also included within this exec.         |
+ |         2. The data file can be FB or VB, PS or PDS Member |
+ |         3. A >END record ends the input list               |
+ |                                                            |
+ | Author:    Lionel B. Dyck                                  |
+ |                                                            |
+ | History:  (most recent on top)                             |
+ |            08/25/21 - v2.3                                 |
+ |                     - Dynamically find data element (macds)|
+ |            08/08/19 - v2.2                                 |
+ |                     - Test for non-Macro mode and call     |
+ |                       ISPTUTOR                             |
+ |            05/28/19 - v2.1                                 |
+ |                     - Add >END support                     |
+ |            05/31/17 - v2.0                                 |
+ |                     - Allow table display outside of edit  |
+ |                       but without selection capability     |
+ |            04/27/17 - v1.6                                 |
+ |                     - Add scale to user command field      |
+ |            04/26/17 - v1.5                                 |
+ |                     - Support PFKeys up to 24              |
+ |                     - Upper case keys for test             |
+ |            04/25/17 - v1.4                                 |
+ |                     - Document the Left, Right and         |
+ |                       ZExpand PF Keys                      |
+ |            04/25/17 - v1.3                                 |
+ |                     - Make parm field in popup panel       |
+ |                       scrollable (thanks to J. Kalinich)   |
+ |            04/24/17 - v1.2                                 |
+ |                     - Make parm field larger in popup      |
+ |            04/22/17 - v1.1                                 |
+ |                     - Add NOPROCESS to allow cursor/row    |
+ |            04/21/17 - v1.0                                 |
+ |                     - Make prompt a PopUp                  |
+ |                     - If not under Edit then display       |
+ |                       tutorial panel                       |
+ |                     - If the command entered on the command|
+ |                       line is a macro in the table then    |
+ |                       execute it.                          |
+ |            04/21/17 - v0.4                                 |
+ |                     - Support ? for help info              |
+ |                     - Support ?xxxx for help info          |
+ |            04/21/17 - v0.3                                 |
+ |                     - Fix FIND                             |
+ |                     - Add RFIND                            |
+ |                     - Clean up table and tutorial panel    |
+ |            04/20/17 - Creation                             |
+ |                                                            |
+ * ---------------------------------------------------------- */
+ Address ISREdit
+ 'Macro NOPROCESS (options)'
+ mrc = rc
+
+/* ----------------------------------------- *
+ | test for return code from 'macro' and     |
+ | if not 0 then issue a message to the user |
+ * ----------------------------------------- */
+ if mrc > 0 then do
+    zerrsm = 'Menu Only'
+    zerrlm = 'Full EMAC processing is only supported under ISPF Edit'
+    end
+
+ /* --------------------------------------------- *
+  | Get the current dataset for the data location |
+  * --------------------------------------------- */
+  parse source src
+  x = listdsi(word(src,4) 'FILE')
+  macds = "'"sysdsname"(emacd)'"
+
+/* --------------- *
+ | Define Defaults |
+ * --------------- */
+ null     = ''
+ emactab  = 'emact'random(999)
+ zerrhm   = 'emach'
+ zerralrm = 'NO'
+ lastfind = 0
+ cmdt     = null
+ row = 0
+
+/* ---------------------------------------------- *
+ | Create a variable for repeat find for passthru |
+ | in the active profile commands table.          |
+ * ---------------------------------------------- */
+ Address ISPExec
+ 'vget (zsctpref zuctpref)'
+ if zuctpref /= null then cmdt = zuctpref'CMDS'
+ else if zsctpref /= null then cmdt = zsctpref'CMDS'
+ if cmdt = null then cmdt = 'ISPCMDS'
+ zctverb  = "RFIND"
+ zcttrunc = 0
+ zctact   = "&EMACRF"
+ zctdesc  = "Repeat Find for EMAC"
+ 'TBAdd' cmdt
+ emacrf = 'PASSTHRU'
+
+/* ------------------------------ *
+ | Fix up variables in the panels |
+ * ------------------------------ */
+ call fix_pvars
+
+/* ---------------------- *
+ | Load the ISPF Panel(s) |
+ * ---------------------- */
+ Start:
+ load_info = loadispf()
+
+/* ---------------------------------- *
+ | Load the ISPF Table of Edit Macros |
+ * ---------------------------------- */
+ Address TSO
+ 'Alloc f('emactab') shr reuse ds('macds')'
+ 'Execio * diskr' emactab '(finis stem in.'
+ 'free f('emactab')'
+ ReStart:
+ Address ISPExec
+ 'TBCreate' emactab 'Names(sel macro help desc)'
+ sel = null
+ do i = 1 to in.0
+    if left(in.i,1) = '*' then iterate
+    if left(in.i,4) = '>END' then leave
+    parse value in.i with macro help desc
+    macro = translate(macro)
+    help  = translate(help)
+    'tbadd' emactab
+    end
+
+/* ------------------------------- *
+ | Now display the table of tables |
+ * ------------------------------- */
+ 'tbsort' emactab 'fields(macro)'
+ if row > 0 then 'tbskip' emactab 'Number('row')'
+ do forever
+    'control display save'
+    'TBDispl' emactab 'Panel(emac)'
+    xrc = rc
+    'control display restore'
+    if xrc > 0 then do
+       call free_libs
+       'tbend' emactab
+       call reset_rfind
+       exit
+       end
+    if zcmd /= null then do
+       sel = null
+       if zcmd = 'RFIND' then zcmd = 'RFIND' opt
+       parse value zcmd with zcmd opt
+       Select
+         When abbrev("ONLY",word(zcmd,1),1) = 1 then do
+              'tbtop' emactab
+              do forever
+                 'tbskip' emactab
+                 if rc > 0 then do
+                    'tbtop' emactab
+                    leave
+                    end
+                 else do
+                      if pos(opt,translate(macro desc)) = 0 then
+                         'tbdelete' emactab
+                      end
+              end
+              end
+         When abbrev("FIND",word(zcmd,1),1) = 1 then do
+              'tbtop' emactab
+              do forever
+                 'tbskip' emactab
+                 if rc > 0 then do
+                    'tbtop' emactab
+                    leave
+                    end
+                 else do
+                      if pos(opt,translate(macro desc)) > 0 then do
+                         'tbquery' emactab 'position(lastfind)'
+                         leave
+                         end
+                      end
+              end
+              end
+         When abbrev("RFIND",word(zcmd,1),2) = 1 then do
+              'tbtop' emactab
+              'tbskip' emactab 'Number('lastfind')'
+              lastfind = lastfind + 1
+              do forever
+                 'tbskip' emactab
+                 tbsrc = rc
+                 if tbsrc > 0 then do
+                    'tbtop' emactab
+                    zerrsm = 'Wrapped'
+                    zerrlm = 'Not found - table at the top'
+                    'Setmsg msg(isrz002)'
+                    lastfind = 0
+                    leave
+                    end
+                 else do
+                      if pos(opt,translate(macro desc)) > 0 then do
+                         'tbquery' emactab 'position(lastfind)'
+                         leave
+                         end
+                      end
+              end
+              end
+         When abbrev("LOCATE",word(zcmd,1),1) = 1 then do
+              'tbtop' emactab
+              do forever
+                 'tbskip' emactab
+                 if rc > 0 then do
+                    'tbtop' emactab
+                    leave
+                    end
+                 else do
+                      if left(macro,length(opt)) = opt then
+                         leave
+                      end
+              end
+              end
+         When abbrev("REFRESH",word(zcmd,1),1) = 1 then do
+              'TBEnd' emactab
+              signal restart
+              end
+         Otherwise do
+                   'tbtop' emactab
+                   hit = 0
+                   do forever
+                      'tbskip' emactab
+                      if rc > 0 then leave
+                      if zcmd = macro then do
+                         hit = 1
+                         sel = 'S'
+                         zcmd = null
+                         leave
+                         end
+                      end
+                   if hit = 1 then leave
+                   zerrsm = 'Invalid Command'
+                   zerrlm = zcmd 'is not a supported command.'
+                   'Setmsg msg(isrz002)'
+                   end
+       end
+       end
+    if sel = 'S' then do
+       if mrc > 0 then do
+          zerrsm = 'Not Supported'
+          zerrlm = 'Select processing is not support outside of' ,
+                   'ISPF Edit.'
+          'Setmsg msg(isrz002)'
+          end
+       else  leave
+       end
+    if sel = 'H' then call do_help
+    end
+
+ mparms = null
+ 'Control Display Save'
+ 'Addpop'
+ 'Display Panel(emacp)'
+ erc = rc
+ 'rempop'
+ 'Control Display Restore'
+ 'tbquery' emactab 'position(row)'
+ call free_libs
+ 'tbend' emactab
+ call reset_rfind
+ if erc > 0 then signal start
+ address isredit
+ macro mparms
+ exit
+
+/* -------------------------------------------------- *
+ | Do_Help routine                                    |
+ |                                                    |
+ | Display the ISPF tutorial for the requested macro. |
+ | or display generic no tutorial panel.              |
+ |                                                    |
+ | If the help panel is ? then issue the command with |
+ | ? as the parm to display the commands help info.   |
+ |                                                    |
+ | If the help panel is ?xxx then issue the command   |
+ | with xxx as the parm to display the help info.     |
+ * -------------------------------------------------- */
+Do_Help:
+  Select
+   When help = 'NONE'
+     then 'Select pgm(isptutor) parm(emachm)'
+   When help = '?'
+     then do
+          Address ISREdit
+          macro '?'
+          Address ISPExec
+          end
+   When left(help,1) = '?'
+     then do
+          help = substr(help,2)
+          Address ISREdit
+          macro help
+          Address ISPExec
+          end
+   Otherwise
+      'Select pgm(isptutor) parm('help')'
+   end
+  return
+
+/* -------------------------------- *
+ | Reset RFIND in the command table |
+ * -------------------------------- */
+ Reset_RFind:
+    'tbtop' cmdt
+    do forever
+       'tbskip' cmdt
+       if rc > 0 then return
+       if zctverb = 'RFIND' then
+          if zctact /= 'SETVERB'
+             then do
+                  'tbdelete' cmdt
+                  leave
+                  end
+       end
+    return
+
+Fix_Pvars: Procedure Expose kl kr kx
+/* --------------------------------------------------- *
+ | Fix Panel Variables                                 |
+ |   &KL is for the Left PFKey                         |
+ |   &KR is for the Right PFKey                        |
+ |   &KX is for the zExpand PFKey                      |
+ |                                                     |
+ | Process all 24 ZPFxx key variables to find the key  |
+ | number for the Left/Right/ZEXPand keys and then set |
+ | our variables with those key assignments.           |
+ * --------------------------------------------------- */
+ kl = 'None'
+ kr = 'None'
+ kx = 'None'
+ do i = 1 to 24
+    'vget (zpf'right(i,2,'0')')'
+    interpret 'key = zpf'right(i,2,'0')
+    key = translate(key)
+    if key = 'LEFT'    then
+       if kl = 'None' then  kl = 'PF'i
+    if key = 'RIGHT'   then
+       if kr = 'None' then kr = 'PF'i
+    if key = 'ZEXPAND' then
+       if kx = 'None' then kx = 'PF'i
+    end
+ Return
+
+Fix_Panel_Record:
+ if pos('&KL',translate(record)) > 0 then do
+    p = pos('&KL',translate(record))
+    lp = left(record,p-1)
+    rp = substr(record,p+3)
+    record = lp''kl''rp
+    end
+ if pos('&KR',translate(record)) > 0 then do
+    p = pos('&KR',translate(record))
+    lp = left(record,p-1)
+    rp = substr(record,p+3)
+    record = lp''kr''rp
+    end
+ if pos('&KX',translate(record)) > 0 then do
+    p = pos('&KX',translate(record))
+    lp = left(record,p-1)
+    rp = substr(record,p+3)
+    record = lp''kx''rp
+    end
+ Return
+
+Free_Libs:
+/* ---------------------- *
+ | Done so TBEnd and Exit |
+ * ---------------------- */
+ do until length(load_info) = 0
+    parse value load_info with dd libd load_info
+    "libdef" libd
+    address tso "free f("dd")"
+    end
+ return
+
+/* --------------------  rexx procedure  -------------------- *
+ * Name:      LoadISPF                                        *
+ *                                                            *
+ * Function:  Load ISPF elements that are inline in the       *
+ *            REXX source code.                               *
+ *                                                            *
+ * Syntax:    load_info = loadispf()                          *
+ *                                                            *
+ *            The inline ISPF resources are limited to        *
+ *            ISPF Messages, Panels, and Skeletons,           *
+ *                 CLISTs and EXECs are also supported.       *
+ *                                                            *
+ *            The inline resources must start in column 1     *
+ *            and use the following syntax:                   *
+ *                                                            *
+ *            >START    used to indicate the start of the     *
+ *                      inline data                           *
+ *                                                            *
+ *            >END    - used to indicate the end of the       *
+ *                      inline data                           *
+ *                                                            *
+ *            Each resource begins with a type record:        *
+ *            >type name                                      *
+ *               where type is CLIST, EXEC, MSG, PANEL, SKEL  *
+ *                     name is the name of the element        *
+ *                                                            *
+ * Sample usage:                                              *
+ *          -* rexx *-                                        *
+ *          load_info = loadispf()                            *
+ *          ... magic code happens here (your code) ...       *
+ *          Address ISPEXEC                                   *
+ *          do until length(load_info) = 0                    *
+ *             parse value load_info with dd libd load_info   *
+ *             if left(libd,6) = "ALTLIB" then do             *
+ *                if libd = "ALTLIBC" then lib = "CLIST"      *
+ *                                    else lib = "EXEC"       *
+ *                Address TSO,                                *
+ *                  "Altlib Deact Application("lib")"         *
+ *                end                                         *
+ *             else "libdef" libd                             *
+ *             address tso "free f("dd")"                     *
+ *             end                                            *
+ *          exit                                              *
+ *          >Start inline elements                            *
+ *          >Panel panel1                                     *
+ *          ...                                               *
+ *          >Msg msg1                                         *
+ *          ...                                               *
+ *          >End of inline elements                           *
+ *                                                            *
+ * Returns:   the list of ddnames allocated for use along     *
+ *            with the libdef's performed or altlib           *
+ *                                                            *
+ *            format is ddname libdef ddname libdef ...       *
+ *                   libdef may be altlibc or altlibe         *
+ *                   for altlib clist or altlib exec          *
+ *                                                            *
+ * Notes:     Entire routine must be included with REXX       *
+ *            exec - inline with the code.                    *
+ *                                                            *
+ * Comments:  The entire rexx program is processed from the   *
+ *            last record to the first to find the >START     *
+ *            record at which point all records from that     *
+ *            point on are processed until the >END           *
+ *            statement or the end of the program is found.   *
+ *                                                            *
+ *            It is *strongly* suggested that the inline      *
+ *            elements be at the very end of your code so     *
+ *            that the search for them is faster.             *
+ *                                                            *
+ *            Inline ISPTLIB or ISPLLIB were not supported    *
+ *            because the values for these would have to be   *
+ *            in hex.                                         *
+ *                                                            *
+ * Author:    Lionel B. Dyck                                  *
+ *                                                            *
+ * History:                                                   *
+ *            05/10/16 - correction for clist and exec        *
+ *            04/19/16 - bug correction                       *
+ *            06/04/04 - Enhancements for speed               *
+ *            08/05/02 - Creation                             *
+ *                                                            *
+ * ---------------------------------------------------------- *
+ * Disclaimer: There is no warranty, either explicit or       *
+ * implied with this code. Use it at your own risk as there   *
+ * is no recourse from either the author or his employeer.    *
+ * ---------------------------------------------------------- */
+ LoadISPF: Procedure expose kl kr kx
+
+ parse value "" with null kmsg kpanel kskel first returns ,
+                     kclist kexec
+/* ------------------------------------------------------- *
+ * Find the InLine ISPF Elements and load them into a stem *
+ * variable.                                               *
+ *                                                         *
+ * Elements keyword syntax:                                *
+ * >START - start of inline data                           *
+ * >CLIST name                                             *
+ * >EXEC name                                              *
+ * >MSG name                                               *
+ * >PANEL name                                             *
+ * >SKEL name                                              *
+ * >END   - end of all inline data (optional if last)      *
+ * ------------------------------------------------------- */
+ last_line = sourceline()
+ do i = last_line to 1 by -1
+    line = sourceline(i)
+    if translate(left(line,6)) = ">START " then leave
+    end
+ rec = 0
+/* --------------------------------------------------- *
+ * Flag types of ISPF resources by testing each record *
+ * then add each record to the data. stem variable.    *
+ * --------------------------------------------------- */
+ do j = i+1 to last_line
+    line = sourceline(j)
+    if translate(left(line,5)) = ">END "   then leave
+    if translate(left(line,7)) = ">CLIST " then kclist = 1
+    if translate(left(line,6)) = ">EXEC "  then kexec  = 1
+    if translate(left(line,5)) = ">MSG "   then kmsg   = 1
+    if translate(left(line,7)) = ">PANEL " then kpanel = 1
+    if translate(left(line,6)) = ">SKEL "  then kskel  = 1
+    rec  = rec + 1
+    data.rec = line
+    end
+
+/* ----------------------------------------------------- *
+ * Now create the Library and Load the Member(s)         *
+ * ----------------------------------------------------- */
+ Address ISPExec
+/* ----------------------------- *
+ * Assign dynamic random ddnames *
+ * ----------------------------- */
+ clistdd = "lc"random(999)
+ execdd  = "le"random(999)
+ msgdd   = "lm"random(999)
+ paneldd = "lp"random(999)
+ skeldd  = "ls"random(999)
+
+/* ---------------------------------------- *
+ *  LmInit and LmOpen each resource library *
+ * ---------------------------------------- */
+ if kclist <> null then do
+    call alloc_dd clistdd
+    "Lminit dataid(clist) ddname("clistdd")"
+    "LmOpen dataid("clist") Option(Output)"
+    returns = strip(returns clistdd 'ALTLIBC')
+    end
+ if kexec <> null then do
+    call alloc_dd execdd
+    "Lminit dataid(exec) ddname("execdd")"
+    "LmOpen dataid("exec") Option(Output)"
+    returns = strip(returns execdd 'ALTLIBE')
+    end
+ if kmsg <> null then do
+    call alloc_dd msgdd
+    "Lminit dataid(msg) ddname("msgdd")"
+    "LmOpen dataid("msg") Option(Output)"
+    returns = strip(returns msgdd 'ISPMLIB')
+    end
+ if kpanel <> null then do
+    call alloc_dd paneldd
+    "Lminit dataid(panel) ddname("paneldd")"
+    "LmOpen dataid("panel") Option(Output)"
+    returns = strip(returns paneldd 'ISPPLIB')
+    end
+ if kskel <> null then do
+    call alloc_dd skeldd
+    "Lminit dataid(skel) ddname("skeldd")"
+    "LmOpen dataid("skel") Option(Output)"
+    returns = strip(returns skeldd 'ISPSLIB')
+    end
+
+/* ----------------------------------------------- *
+ * Process all records in the data. stem variable. *
+ * ----------------------------------------------- */
+ do i = 1 to rec
+    record = data.i
+    recordu = translate(record)
+    if left(recordu,5) = ">END " then leave
+    if left(recordu,7) = ">CLIST " then do
+       if first = 1 then call add_it
+       type = "Clist"
+       first = 1
+       parse value record with x name
+       iterate
+       end
+    if left(recordu,6) = ">EXEC " then do
+       if first = 1 then call add_it
+       type = "Exec"
+       first = 1
+       parse value record with x name
+       iterate
+       end
+    if left(recordu,5) = ">MSG " then do
+       if first = 1 then call add_it
+       type = "Msg"
+       first = 1
+       parse value record with x name
+       iterate
+       end
+    if left(recordu,7) = ">PANEL " then do
+       if first = 1 then call add_it
+       type = "Panel"
+       first = 1
+       parse value record with x name
+       iterate
+       end
+    if left(recordu,6) = ">SKEL " then do
+       if first = 1 then call add_it
+       type = "Skel"
+       first = 1
+       parse value record with x name
+       iterate
+       end
+    Call Fix_Panel_Record
+   /* --------------------------------------------*
+    * Put the record into the appropriate library *
+    * based on the record type.                   *
+    * ------------------------------------------- */
+    Select
+      When type = "Clist" then
+           "LmPut dataid("clist") MODE(INVAR)" ,
+                 "DataLoc(record) DataLen(255)"
+      When type = "Exec" then
+           "LmPut dataid("exec") MODE(INVAR)" ,
+                 "DataLoc(record) DataLen(255)"
+      When type = "Msg" then
+           "LmPut dataid("msg") MODE(INVAR)" ,
+                 "DataLoc(record) DataLen(80)"
+      When type = "Panel" then
+           "LmPut dataid("panel") MODE(INVAR)" ,
+                 "DataLoc(record) DataLen(80)"
+      When type = "Skel" then
+           "LmPut dataid("skel") MODE(INVAR)" ,
+                 "DataLoc(record) DataLen(80)"
+      end
+    end
+ if type <> null then call add_it
+/* ---------------------------------------------------- *
+ * Processing completed - now lmfree the allocation and *
+ * Libdef the library.                                  *
+ * ---------------------------------------------------- */
+ if kclist <> null then do
+    Address TSO,
+    "Altlib Act Application(Clist) File("clistdd")"
+    "LmFree dataid("clist")"
+    end
+ if kexec <> null then do
+    Address TSO,
+    "Altlib Act Application(Exec) File("execdd")"
+    "LmFree dataid("exec")"
+    end
+ if kmsg <> null then do
+    "LmFree dataid("msg")"
+    "Libdef ISPMlib Library ID("msgdd") Stack"
+    end
+ if kpanel <> null then do
+    "Libdef ISPPlib Library ID("paneldd") Stack"
+    "LmFree dataid("panel")"
+    end
+ if kskel <> null then do
+    "Libdef ISPSlib Library ID("skeldd") Stack"
+    "LmFree dataid("skel")"
+    end
+ return returns
+
+/* --------------------------- *
+ * Add the Member using LmmAdd *
+ * based upon type of resource *
+ * --------------------------- */
+ Add_It:
+ if type = "Clist" then
+    "LmmAdd dataid("clist") Member("name")"
+ if type = "Exec" then
+    "LmmAdd dataid("exec") Member("name")"
+ if type = "Msg" then
+    "LmmAdd dataid("msg") Member("name")"
+ if type = "Panel" then
+    "LmmAdd dataid("panel") Member("name")"
+ if type = "Skel" then
+    "LmmAdd dataid("skel") Member("name")"
+ type = null
+ return
+
+/* ------------------------------ *
+ * ALlocate the temp ispf library *
+ * ------------------------------ */
+ Alloc_DD:
+ arg dd
+ Address TSO
+ if pos(left(dd,2),"lc le") > 0 then
+ "Alloc f("dd") unit(sysda) spa(5,5) dir(1)",
+    "recfm(v b) lrecl(255) blksize(32760)"
+ else
+ "Alloc f("dd") unit(sysda) spa(5,5) dir(1)",
+    "recfm(f b) lrecl(80) blksize(23440)"
+ return
+
+/* ------------------------------------------------ *
+ | Here is the ISPF Panel that will be dynamnically |
+ | loaded for use.                                  |
+ * ------------------------------------------------ */
+>START
+>PANEL emac
+)Attr Default(%+_)
+   # type(input)  intens(low ) caps(on ) just(left) hilite(uscore)
+   @ type(output) intens(low ) caps(off) just(left)
+   $ type(  text) intens(high) caps(off) hilite(reverse)
+   \ type(output) intens(high) caps(off) hilite(reverse)
+   _ type(input ) intens(high) caps(on) hilite(uscore )
+)Body  Expand(//)
+%-/-/-$List of ISPF Edit Macros \ver%-/-/-
+%Command ===>_zcmd                                 / /%Scroll ===>_amt +
+%
+%S Macro    Description
+%- -------  -----------------------------------------------------------------
+)Model
+#z@z       @z
+)Init
+ .help = emach
+ .zvars =  '(sel macro desc)'
+  &amt = CSR
+)Reinit
+)Proc
+)End
+>PANEL emach
+)ATTR DEFAULT(%+_)
+   %   TYPE(TEXT)  INTENS(HIGH) SKIP(ON)
+   +   TYPE(TEXT)  INTENS(LOW)  SKIP(ON) COLOR(GREEN)
+   _   TYPE(INPUT) INTENS(HIGH) CAPS(ON) JUST(LEFT) HILITE(USCORE)
+   # area(scrl) extend(on)
+)BODY EXPAND(\\)
+%Tutorial+-\-\-(%ISPF Macro Selection List+)-\-\-%Tutorial
+%Command ===>_ZCMD
++
+#help                                                                          #
+)area help
+%EMAC+presents a list of ISPF Edit Macros from which the user may select to
++execute or request to display help information (if available).  The user
++will be presented with a popup to enter any macro options before invoking
++the macro on the active Edit member. Any cursor position or row selections
++will be passed to any selected macro.
++
++Syntax: emac
++
++Table Commands:
++
+%   Find xxx      +Finds the 1st string xxx in either macro or description
++                  Repeat find is enabled.
+%   Only xxx      +Only displays rows where the string xxx is found in
++                  either the macro name or the description
+%   Locate xxx    +Locates the 1st row with a member that matches xxx
+%   Refresh       +Rebuilds the table with all macros after an Only
+%   macro         +If the macro name is entered on the command line
++                  then it will be selected
++
++Row Commands:
++
+%   H             +Display ISPF Tutorial for the Macro
+%   S             +Selects the macro to be executed
++                  (Not supported outside of ISPF Edit or View)
++
++Note: After selecting a macro to run the user will be presented with
++      a popup panel in which to enter any optional/required macro
++      parameters. This field is scrollable up to 1023 characters using
++      the left and right program function keys, and may be expanded using
++      the ZEXPAND command (assigned to a PF Key or enter on the command
++      line and then place the cursor in the parameter field and press
++      Enter).
++
++      Current PF Keys: Left:    &kl
++                       Right:   &kr
++                       zExpand: &kx
++
++Suggestion: Once you learn about a macro use it directly instead of via
++            this menu. That should give you more control over its use.
++
++ \ \ (press%ENTER+to continue) \ \
+)PROC
+)END
+>PANEL emachm
+)ATTR DEFAULT(%+_)
+   %   TYPE(TEXT)  INTENS(HIGH) SKIP(ON)
+   +   TYPE(TEXT)  INTENS(LOW)  SKIP(ON) COLOR(GREEN)
+   _   TYPE(INPUT) INTENS(HIGH) CAPS(ON) JUST(LEFT) HILITE(USCORE)
+   @ type(output) intens(high) just(left)
+)Body Window(55,9) Expand(\\)
+%Tutorial+-\-\-(%ISPF Macro Tutorial+)-\-\-%Tutorial
+%Command ===>_ZCMD
++
++ Macro: @macro
++
++ The requested macro does not have an ISPF Tutorial.
++
++ \ \ (press%Enter+to continue) \ \
+)PROC
+)END
+>PANEL EMACP
+)Attr Default(%+_)
+   # type(input)  intens(low ) caps(off) just(left) hilite(uscore)
+   @ type(output) intens(high) caps(off) just(left)
+   $ type(  text) intens(high) caps(off) hilite(reverse)
+   _ type(input ) intens(high) caps(on) hilite(uscore )
+)Body Window(72,13) Expand(\\)
+%-\-\-$Edit Macro Prompting%-\-\-
+%Command ===>_zcmd
+%
+%Select Macro: @macro
++
++Enter Macro Parms:
+  %===>_mparms                                                       @z
+       @lr1sc
++      (scroll Right: &kr and Left: &kl for up to 1023 characters or
++       use ZEXPand - PF Key &kx)
++
++    Press PF3 to cancel or Enter to continue
++
+)Init
+  .cursor = mparms
+  .zvars = '(mpind)'
+)Proc
+)Field
+ Field(mparms) ind(mpind,'<>') len(1023) scale(lr1sc)
+)End

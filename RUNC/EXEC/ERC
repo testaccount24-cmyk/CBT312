@@ -1,0 +1,182 @@
+/* --------------------  rexx procedure  -------------------- *
+ | Name:      erc                                             |
+ |                                                            |
+ | Function:  edit the run commands pds                       |
+ |                                                            |
+ | Syntax:    %erc option member                              |
+ |                                                            |
+ |            member is optional                              |
+ |                                                            |
+ |            options:                                        |
+ |                                                            |
+ |            -E to use Edit instead of View                  |
+ |            /SET to prompt user to change the command pds   |
+ |            ? or Help for tutorial                          |
+ |                                                            |
+ | Usage Notes: Used to edit the run commands pds so that     |
+ |              runc may be used on the members               |
+ |                                                            |
+ |              When run if the ercdsn variable is not        |
+ |              found in ispf then the user will be           |
+ |              prompted for the dataset name                 |
+ |                                                            |
+ |              ERC should be called from the ISPF Command    |
+ |              table in applid ISR.                          |
+ |                                                            |
+ | Author:    Lionel B. Dyck                                  |
+ |                                                            |
+ | History:  (most recent on top)                             |
+ |            01/10/19 - Update for REMPOP location           |
+ |            04/03/18 - Use MEMLIST service unless specific  |
+ |                       member requested                     |
+ |            11/24/17 - Correct bug with /SET to clear       |
+ |                       the member variable after the set    |
+ |            12/22/16 - Add error message if member in use   |
+ |            12/12/16 - Externalize Panels and remove        |
+ |                       the loadispf routine                 |
+ |            12/09/16 - Update to loadispf routine           |
+ |            12/07/16 - Add ? or Help for Tutorial           |
+ |            11/30/16 - Add -E option and make View default  |
+ |                     - Support TSO PROFILE NOPREFIX         |
+ |                     - if the command dataset is prefixed   |
+ |                       with the users userid then default   |
+ |                       to Edit instead of View              |
+ |            11/22/16 - Change back to pure edit forget      |
+ |                       Memlist                              |
+ |            11/21/16 - Change to use MEMLIST for 9 char     |
+ |                       selection field                      |
+ |            11/18/16 - Make dsn prompt a popup              |
+ |            11/17/16 - Add ercdsn                           |
+ |                     - Make sure running under ISR applid   |
+ |            11/16/16 - Creation                             |
+ |                                                            |
+ * ---------------------------------------------------------- */
+
+/* ---------------------------------------- *
+ | Get the member name, if any, to be used. |
+ |                                          |
+ | May also be a mask (e.g. abc*)           |
+ * ---------------------------------------- */
+ arg member
+
+/* ------------------------------------- *
+ | Setup the ISPF addressing environment |
+ * ------------------------------------- */
+ Address ISPExec
+
+/* -------------------------------------------- *
+ | Check for ISPF Applid of ISR and if not then |
+ | recurse into ISR.                            |
+ * -------------------------------------------- */
+ "Vget (Zapplid)"
+ "Control Errors Return"
+ if zapplid <> "ISR" then do
+     "Select Cmd(%"sysvar('sysicmd') member") newappl(isr)"
+    exit 0
+    end
+
+/* ---------------------------------------- *
+ | Check for Help and then Display Tutorial |
+ * ---------------------------------------- */
+ if abbrev("HELP",member,1) = 1 then call help
+ if member = '?'     then call help
+
+/* ---------------------------------------------- *
+ | Check for the ERCDSN variable that defines the |
+ | dataset where the command members are located. |
+ |                                                |
+ | If not found then prompt the user for it.      |
+ * ---------------------------------------------- */
+ if member = '/SET' then do
+    call set_dsn
+    member = ''
+    end
+ else do
+      'vget (ercdsn) profile'
+      if ercdsn = '' then call set_dsn
+      end
+
+/* ---------------------------------- *
+ | Remove quotes from ERCDSN if there |
+ * ---------------------------------- */
+ if left(ercdsn,1) = "'"
+   then parse value ercdsn with "'"cdsn"'"
+    else do
+         if sysvar('syspref') /= '' then hlq = sysvar('syspref')
+                                    else hlq = sysvar('sysuid')
+         cdsn = hlq'.'ercdsn
+         end
+
+/* ------------------- *
+ | Check option for -E |
+ * ------------------- */
+ if words(member) > 1 then parse value member with option member
+ if option = '-E' then ev = 'Edit'
+                  else ev = 'View'
+
+/* ----------------------------------------------------- *
+ | Check for a command dataset that is prefixed with the |
+ | active users userid and if so then default to Edit.   |
+ * ----------------------------------------------------- */
+ userid = sysvar('sysuid')
+ if left(ercdsn,1) = "'" then do
+    if userid = substr(ercdsn,2,length(userid)) then ev = 'Edit'
+    end
+ else if sysvar('syspref') = userid then ev = 'Edit'
+
+/* ------------------------------------------------------------- *
+ | Now open the dataset in memlist or open the requested member. |
+ * ------------------------------------------------------------- */
+ Select
+   when pos('*',member) > 0 then call mlist
+   When member /= ''
+        then ev "Dataset('"cdsn"("member")')"
+   Otherwise call mlist
+   end
+
+ Exit
+
+/* ------------------- *
+ | Use Memlist service |
+ * ------------------- */
+ MList:
+  "LMInit Dataid(tmm) dataset('"cdsn"')"
+  "Memlist Dataid("tmm") member("member")"
+  "LMfree Dataid("tmm")"
+  return
+
+/* --------------------------------------- *
+ | Prompt the user for the command dataset |
+ * --------------------------------------- */
+ Set_dsn: Procedure expose ercdsn
+
+/* --------------------------------------- *
+ | Prompt the user and save the ERCDSN var |
+ * --------------------------------------- */
+ do forever
+    'Addpop'
+    'Display Panel(ercprmpt)'
+    erc = rc
+    'Rempop'
+    if erc > 0 then leave
+    end
+
+ if ercdsn /= '' then do
+    'vput (ercdsn) profile'
+    zedsmsg = 'ERC Dataset Set'
+    zedlmsg = 'ERC Dataset has been set to:' ercdsn
+    'Setmsg msg(isrz001)'
+    end
+
+/* ---------------------- *
+ | Now return and process |
+ * ---------------------- */
+ Return
+
+/* ----------------------------------------------------------- *
+ | Help Procedure                                              |
+ * ----------------------------------------------------------- */
+ Help:
+ Address ISPEXEC  ,
+ 'Select pgm(isptutor) parm(#erc)'
+ exit

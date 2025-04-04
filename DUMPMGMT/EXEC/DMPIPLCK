@@ -1,0 +1,89 @@
+        /* ---------------------  rexx procedure  ---------------------- *
+         * Name:      DMPIPLCK                                           *
+         *                                                               *
+         * Function:  Check for system dumps that have not been          *
+         *            entered into the MVS.DUMPLOG dataset after         *
+         *            an IPL.                                            *
+         *                                                               *
+         * Syntax:    %dmpiplck                                          *
+         *                                                               *
+         * Author:    Lionel B. Dyck                                     *
+         *            Kaiser Permanente                                  *
+         *            Walnut Creek, CA 94598                             *
+         *            (925) 926-5332                                     *
+         *            Internet: lionel.b.dyck@kp.org                     *
+         *                                                               *
+         * History:                                                      *
+         *            09/18/01 - fix if multiple vols to a d/s           *
+         *            09/17/99 - Support SVCDUMP hlq                     *
+         *            12/08/98 - creation                                *
+         *                                                               *
+         * ------------------------------------------------------------- */
+
+        /* -------------------------- *
+         * setup dsn for control d/s  *
+         * -------------------------- */
+         dsn = "'mvs.dumplog'"
+
+        /* -------------------------- *
+         * Read in control d/s        *
+         * -------------------------- */
+         dd = "DMP"random(999)
+         "Alloc f("dd") ds("dsn") shr reuse"
+         "Execio * diskr" dd "(Finis stem cc."
+         "Free  f("dd")"
+
+        /* -------------------------- *
+         * trap listc for dump hlq    *
+         * -------------------------- */
+         call outtrap 'trap.'
+         "Listc Level(mvs.dump) vol"
+         "Listc Level(svcdump) vol"
+         call outtrap 'off'
+
+        /* -------------------------- *
+         * Process trap'd response    *
+         * -------------------------- */
+         vol_ck = 0
+         do i = 1 to trap.0
+            Select
+            when word(trap.i,1) = "NONVSAM" then do
+                 d_dsn = word(trap.i,3)
+                 d_vol = ""
+                 vol_ck = 0
+                 end
+            when substr(trap.i,8,6) = "VOLSER" then do
+                 d_vol = substr(trap.i,26,6)
+                 if vol_ck = 0 then
+                    call check_it
+                 vol_ck = 1
+                 end
+            otherwise nop
+            end
+         end
+
+         Exit 0
+
+         Check_it:
+        /* -------------------------- *
+         * verify dump dsn is 'ours'  *
+         * -------------------------- */
+         dump = 1
+         if left(d_dsn,8) = "SVCDUMP." then dump = 0
+         if left(d_dsn,10) = "MVS.DUMP.D" then dump = 0
+         if dump = 1 then return
+
+        /* -------------------------- *
+         * If vol=MIGRAT then ok      *
+         * -------------------------- */
+         if d_vol = "MIGRAT" then return
+
+         do c = 4 to cc.0
+            parse value cc.c with . 10 c_dsn .
+            if d_dsn = strip(c_dsn) then do
+               "hmig '"d_dsn"' ml2"
+               return
+               end
+            end
+         "%sdmplog" d_dsn
+         return

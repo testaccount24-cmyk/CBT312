@@ -1,0 +1,31 @@
+)ATTR DEFAULT(%+_)
+   +   TYPE(TEXT)  INTENS(LOW)  SKIP(ON) COLOR(GREEN)
+   _   TYPE(INPUT) INTENS(HIGH) CAPS(ON) JUST(LEFT) HILITE(USCORE)
+)BODY EXPAND(\\)
+%Tutorial+-\-\-(%RUNC - Review/Set Defaults+)-\-\-%Tutorial
+%Command ===>_ZCMD
++
++  %-B+       +Browse the generated report of all messages
++  %-T+       +No report - all messages to the terminal
++  %-V+       +View the generated report of all messages
++  %-L+       +Log all messages to a permanent dataset %(-L+or%-LD+or%-LP)
++  %-D+       +No report - all messages inserted as Data records
++              Data Prefix is optional. Leading/Trailing blanks removed.
++  %-N+       +No report - all messages inserted as Notelines
++  %-R+       +Generate a report of all messages
++  %-BS+      +Bypass prompting for supported symbolics
++  %-I+       +Display Individual Command messages
++  %-S nnn+   +Stop multiple command processing if return code exceeds nnn
++  %-W nnn+   +Wrap%-D+and%-N+messages to nnn characters
++              nnn may be%W+for the actual data width
++
++   Notes:     1. Save as permanent user default%Y+or%N+for just this use
++              2.%-D+and%-N+override%-B -I -T -V+and%-L
++              3.%-T+override%-D -I -N -R+and%-L
++              4. Use%RUNC -O+to review/update defaults
++
++ \ \ (press%ENTER+to continue) \ \
+)PROC
+  &ZUP     = #RUNC7
+  &ZCONT   = #RUNC
+)END

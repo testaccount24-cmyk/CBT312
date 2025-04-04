@@ -1,0 +1,359 @@
+        /* --------------------  rexx procedure  -------------------- */
+        ver = "1.1"
+        /* Name:      csvedit                                         *
+         *                                                            *
+         * Function:  ISPF Edit Macro to convert data to csv format   *
+         *                                                            *
+         * Syntax:    csvedit                                         *
+         *                                                            *
+         * Logic:     (such as it is)                                 *
+         *            Invoke as an ISPF Edit Macro with no parms      *
+         *            Test line 1 of the data for column indicator    *
+         *              characters - a >                              *
+         *              - if column indicators are found then         *
+         *                - set to null all column values             *
+         *                - find column for each > and set the        *
+         *                  column values                             *
+         *            Display the CSVEDIT prompting panel             *
+         *              - user may change/update column values        *
+         *              - user may enter ignore information           *
+         *                - column or 0 for any column                *
+         *                - data or ' ' for blank                     *
+         *            Processing flow                                 *
+         *              - remove all records which match ignore       *
+         *                specifications                              *
+         *              - process column information                  *
+         *                - if data begins with 0 then set ="xx"      *
+         *                - enclose in double quotes (") if           *
+         *                  - a blank or comma is found in the        *
+         *                    data                                    *
+         *                                                            *
+         * Author:    Lionel B. Dyck                                  *
+         *            Kaiser Permanente Information Technology        *
+         *            Walnut Creek, CA 94598                          *
+         *            (925) 926-5332                                  *
+         *            Internet: lionel.b.dyck@kp.org                  *
+         *                                                            *
+         * History:                                                   *
+         *            04/09/08 - v1.1 From Rick Turnbull (StateAuto)  *
+         *                            to convert signs in numbers     *
+         *            11/06/02 - v1.0 add option for alternate char   *
+         *                            for comma                       *
+         *            09/01/01 - v0.9 add option for leading zeros    *
+         *            08/30/01 - v0.8 correct for empty column        *
+         *            08/30/01 - v0.7 correct for files with cc       *
+         *            08/30/01 - v0.6 correct test for ' '            *
+         *            08/27/01 - v0.5 add column 14                   *
+         *            08/27/01 - v0.4 fix lost character              *
+         *            08/27/01 - v0.3 support leading zeros           *
+         *            08/27/01 - v0.2 level                           *
+         *            08/27/01 - v0.1 level                           *
+         *            08/24/01 - v.0.01 created                       *
+         *                                                            *
+         * ---------------------------------------------------------- */
+         Address ISREdit
+         "Macro"
+
+        /* --------------------------------------------------------- *
+         * Setup Default Values                                      *
+         * --------------------------------------------------------- */
+         parse value "" with null
+         /* StateAuto Modification Begin */
+                                        /* tables used in function */
+                                        /*  ConvertSign            */
+         TI1 = 'C0C1C2C3C4C5C6C7C8C9'x  /* positive signed numbers */
+         TI2 = 'D0D1D2D3D4D5D6D7D8D9'x  /* negative signed numbers */
+         TO1 = '0123456789'             /* numbers with no sign    */
+         /* StateAuto Modification End   */
+
+        /* --------------------------------------------------------- *
+         * Look for column specification characters '>' in record 1  *
+         * if found:                                                 *
+         *   - delete the line of data (as we don't need it)         *
+         *   - reset column values to null                           *
+         *   - get column location for each '>' and then set the     *
+         *     corresponding column value                            *
+         * --------------------------------------------------------- */
+          "(data) = line 1"
+          if pos(" > ",data) > 0 then do
+             "Delete" 1
+             parse value "" with c1 c2 c3 c4 c5 c6 c7 c8 c9 ca cb ,
+                                 cc cd ce
+             start = 1
+             count = 1
+             pos. = null
+             do forever
+                p = pos(">",data,start)
+                if p = 0 then leave
+                pos.count = p
+                start = p+1
+                count = count + 1
+                end
+             if pos.1 <> null then c1 = pos.1
+             if pos.2 <> null then c2 = pos.2
+             if pos.3 <> null then c3 = pos.3
+             if pos.4 <> null then c4 = pos.4
+             if pos.5 <> null then c5 = pos.5
+             if pos.6 <> null then c6 = pos.6
+             if pos.7 <> null then c7 = pos.7
+             if pos.8 <> null then c8 = pos.8
+             if pos.9 <> null then c9 = pos.9
+             if pos.10 <> null then ca = pos.10
+             if pos.11 <> null then cb = pos.11
+             if pos.12 <> null then cc = pos.12
+             if pos.13 <> null then cd = pos.13
+             if pos.14 <> null then ce = pos.14
+             end
+
+        /* --------------------------------------------------------- *
+         * Display CSVEDIT ISPF Panel to get conversion info         *
+         * --------------------------------------------------------- */
+         Display:
+         Address ISPExec
+         "Display panel(csvedit)"
+         src = rc
+         if src > 0 then do
+            zedsmsg = "Cancelled."
+            zedlmsg = "CSV Edit Conversion Cancelled."
+            "Setmsg msg(isrz001)"
+            exit 0
+            end
+
+        /* --------------------------------------------------------- *
+         * Save the Panel variables in the ISPF Profile              *
+         * --------------------------------------------------------- */
+         "Vput (c1 c2 c3 c4 c5 c6 c7 c8 c9 ca cb cc cd ce " ,
+               "d1 d2 d3 d4 d5 d6 char" ,
+               "i1 i2 i3 i4 i5 i6 lz s) Profile"
+
+         Address ISREdit
+
+        /* --------------------------------------------------------- *
+         * Validate the provided input                               *
+         * - test to ensure columns are sequential in order           *
+         * --------------------------------------------------------- */
+         zedsmsg = ""
+         if ce <> "" then
+            if cd > ce then do
+               zedlmsg = "Column 14 is not greater than column 13"
+               call do_msg
+               end
+         if cd <> "" then
+            if cc > cd then do
+               zedlmsg = "Column 13 is not greater than column 12"
+               call do_msg
+               end
+         if cc <> "" then
+            if cb > cc then do
+               zedlmsg = "Column 12 is not greater than column 11"
+               call do_msg
+               end
+         if cb <> "" then
+            if ca > cb then do
+               zedlmsg = "Column 11 is not greater than column 10"
+               call do_msg
+               end
+         if ca <> "" then
+            if c9 > ca then do
+               zedlmsg = "Column 9 is not greater than column 10"
+               call do_msg
+               end
+         if c9 <> "" then
+            if c8 > c9 then do
+               zedlmsg = "Column 8 is not greater than column 9"
+               call do_msg
+               end
+         if c8 <> "" then
+            if c7 > c8 then do
+               zedlmsg = "Column 7 is not greater than column 8"
+               call do_msg
+               end
+         if c7 <> "" then
+            if c6 > c7 then do
+               zedlmsg = "Column 6 is not greater than column 7"
+               call do_msg
+               end
+         if c6 <> "" then
+            if c5 > c6 then do
+               zedlmsg = "Column 5 is not greater than column 6"
+               call do_msg
+               end
+         if c5 <> "" then
+            if c4 > c5 then do
+               zedlmsg = "Column 4 is not greater than column 5"
+               call do_msg
+               end
+         if c4 <> "" then
+            if c3 > c4 then do
+               zedlmsg = "Column 3 is not greater than column 4"
+               call do_msg
+               end
+         if c3 <> "" then
+            if c2 > c3 then do
+               zedlmsg = "Column 2 is not greater than column 3"
+               call do_msg
+               end
+         if c2 <> "" then
+            if c1 > c2 then do
+               zedlmsg = "Column 1 is not greater than column 2"
+               call do_msg
+               end
+
+        /* --------------------------------------------------------- *
+         * Delete all records matching Ignore criteria.              *
+         * --------------------------------------------------------- */
+         "cursor = line 1"
+         "(line) = linenum .zcsr"
+         if i1 <> null then do forever
+            "(last) = linenum .zl"
+            if del = 0 then line = line + 1
+            if line > last then leave
+            del = 0
+            "(data) = line" line
+            data = translate(data)
+            call test_ignore i1 d1
+               if del = 1 then iterate
+            call test_ignore i2 d2
+               if del = 1 then iterate
+            call test_ignore i3 d3
+               if del = 1 then iterate
+            call test_ignore i4 d4
+               if del = 1 then iterate
+            call test_ignore i5 d5
+               if del = 1 then iterate
+            call test_ignore i6 d6
+            end
+
+        /* --------------------------------------------------------- *
+         * Now begin CSV conversion                                  *
+         * --------------------------------------------------------- */
+         line = 0
+         "(last) = linenum .zl"
+         do forever
+            line = line + 1
+            if line > last then leave
+            "(data) = line" line
+            record = null
+            if c1 <> null then call do_csv c1 c2
+            if c2 <> null then call do_csv c2 c3
+            if c3 <> null then call do_csv c3 c4
+            if c4 <> null then call do_csv c4 c5
+            if c5 <> null then call do_csv c5 c6
+            if c6 <> null then call do_csv c6 c7
+            if c7 <> null then call do_csv c7 c8
+            if c8 <> null then call do_csv c8 c9
+            if c9 <> null then call do_csv c9 ca
+            if ca <> null then call do_csv ca cb
+            if cb <> null then call do_csv cb cc
+            if cc <> null then call do_csv cc cd
+            if cd <> null then call do_csv cd ce
+            if ce <> null then call do_csv ce
+            if left(record,1) = "," then
+               record = substr(record,2)
+            record = " "left(record,length(record)-1)
+            "LINE" line   " = (record)"
+            end
+
+        /* --------------------------------------------------------- *
+         * Processing completed - inform the user.                   *
+         * --------------------------------------------------------- */
+        zedsmsg = ""
+        zedlmsg = "CSV Conversion completed.",
+                  "The file is now ready for download or" ,
+                  "e-mail for import into Excel."
+        Address ISPExec
+        "Setmsg msg(isrz001)"
+        Exit 0
+
+        /* --------------------------------------------------------- *
+         * Extract CSV Column Data                                   *
+         * Then test it:                                             *
+         *   - begins with a zero       = set to ="xxx"              *
+         *            test lz panel option                           *
+         *   - contains a comma         = enclose in double quotes   *
+         *   - contains a blank         = enclose in double quotes   *
+         *   - insert comma between values                           *
+         * --------------------------------------------------------- */
+         Do_CSV:
+           arg start next
+           if next = null then
+              work = strip(substr(data,start))
+           else
+              work = strip(substr(data,start,next-start))
+           if length(work) = 0 then work = " "
+           /* StateAuto Modification Begin */
+           if s1 = 'Y' then work = ConvertSign(work)
+              /* s1 is initialize on the main panel */
+           /* StateAuto Modification End   */
+
+           Select
+             When left(work,1) = "0" then do
+                  if lz = "YES" then
+                     work = '="'work'"'
+                  end
+             When pos(",",work) > 0 then work = '"'work'"'
+             When pos(" ",work) > 0 then work = '"'work'"'
+             otherwise nop
+             end
+
+           work = work""char
+           record = record""work
+           return
+
+        /* --------------------------------------------------------- *
+         * Test for Ignore Record Subroutine                         *
+         * --------------------------------------------------------- */
+         Test_Ignore:
+         arg posit test_data
+         del = 0
+         if test_data = "' '" then test_data = " "
+         select
+         When posit = 0 then
+           if pos(test_data,data) > 0 then do
+             "Delete" line
+             del = 1
+             end
+         When posit > 0 then
+            if substr(data,posit,length(test_data)) = test_data then do
+             "Delete" line
+             del = 1
+             end
+         Otherwise nop
+         end
+         return
+
+        /* --------------------------------------------------------- *
+         * Issue message and redisplay prompt                        *
+         * --------------------------------------------------------- */
+         do_msg:
+            Address ISPExec
+            "Setmsg msg(isrz001)"
+            signal display
+
+        /* --------------------------------------------------------- *
+         * StateAuto Modification Begin                              *
+         * --------------------------------------------------------- *
+                 Function to convert Signed Numeric fields to
+                 Separate signs.
+                 Examples: Convert  000123{  to +1230
+                                    000324P  to -3247
+        */
+        ConvertSign:
+          parse arg sField
+          nPart = strip(left(sField,length(sField)-1))
+          sPart = right(sField,1)
+          if datatype(nPart,"N") = 1 then do
+            select
+              when sPart >= 'D0'x & sPart <= 'D9'x then do
+                sField = "-"strip(nPart,"L","0")||,
+                         translate(sPart,TO1,TI2)
+                end
+              when sPart >= 'C0'x & sPart <= 'C9'x then do
+                sField = "+"strip(nPart,"L","0")||,
+                         translate(sPart,TO1,TI1)
+                end
+              otherwise nop
+              end
+            end
+          return sField
+        /* StateAuto Modification End   */

@@ -1,0 +1,32 @@
+)ATTR DEFAULT(%$_)
+   %   TYPE(TEXT)  INTENS(HIGH) SKIP(ON)
+   $   TYPE(TEXT)  INTENS(LOW)  SKIP(ON) COLOR(GREEN)
+   _   TYPE(INPUT) INTENS(HIGH) CAPS(ON) JUST(LEFT) HILITE(USCORE)
+)BODY EXPAND(\\)
+%Tutorial$-\-\-(%RUNC - Edit Macro$)-\-\-%Tutorial
+%Command ===>_ZCMD
+$
+$
+$ 1. Symbolics are supported in the command using the syntax of%&&symbol.
+$ 2. Multiple symbolics may be used in the same command, delineated by
+$    other symbolics, commas, semi-colons, single quotes, double quotes,
+$    <>, (), or other special symbol.
+$ 3. Symbolics are remembered for all uses of the same RUNC use.
+$ 4. Use of%&&$will prevent the symbolic from being resolved for the command.
+$ 5. The Rename command requires a volser - use * to use the cataloged
+$    volser.
+$ 6. Use the%SET$command to define a symbolic for use and that symbolic will
+$    not generate a pop up prompt. The set value does not need to be in quotes
+$    unless quotes are required by the usage.
+$ 7. Use%SET$PROMPT to enable prompting for RUNC defined symbolics or NOPPROMPT
+$    to disable prompting. Only applies to RUNC defined symbolics and over-rides
+$    the user set defaults (see RUNC -O).
+$
+$
+$
+$
+$ \ \ (press%ENTER$to continue) \ \
+)PROC
+  &ZUP     = #RUNC2
+  &ZCONT   = #RUNC2B
+)END

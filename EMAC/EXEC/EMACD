@@ -1,0 +1,129 @@
+* ------------------------------------------------------------------------- *
+* this is the data file used by the EMAC ISPF Edit command
+* the format is:
+*
+*Column 1 * is a comment record
+*
+* word 1 is the ispf macro name
+* word 2 is the ispf tutorial panel name
+*        - if there isn't a tutorial panel code none
+*        - if the command display a help enter ?
+*          or ?xxxx where xxxx is the option to display help
+* rest   description of the macro
+*       - the descrption may be up to 67 characters in length
+*
+* Update History: (push down list)
+*
+*        05/01/17 - Added BIGS
+*        04/22/17 - Removed BIGS as it doesn't exist
+*        04/21/17 - Added help panel or parm
+*                 - Removed non-macros and missing macros
+*                 - Added TRYIT and EDITMAIL
+*        04/20/17 - Converted from EMACDATA
+*
+* ------------------------------------------------------------------------- *
+$DO      $DO      Verify a REXX exec for the DO/END syntax
+ADDAFTR  ADDAFTR  Insert a line of data after each line within a range
+ADDCOL   None     Adds a column of numbers in the editor
+ADDTRK   ADDTRK   Add tracks to dataset. "ADDTRK 5" to add 5
+ALL      ALL      Exclude all lines that don't contain the found string(s)
+B        B        Recursive Browse
+BAREDIT  ?help    Convert exclamation marks (!) to vertical bars (|)
+BIG      BIG      Create block characters in text
+BIGS     BIGS     Create slanged block characters in text
+BLANK    BLANK    Blank out columns specified by user
+BOX      BOX      Place "*" around text already in the dataset
+CA7VAR   CA7VAR   Resolve CA-7 vars & schids.  "CA7VAR schid tblnm"
+CCOL     ?        Copies columns of data. See also COLUTIL & MOVECOLS
+CI       None     Cursor sensitive 3.2 data info. Place cursor on DSN
+CLIP     CUTHELP@ Write lines from a file to a ISPF table in member
+CLISTBOX CLISTBOX Mark clist lines as comments using CC to CC
+CMT      ?        Insert comments into JCL, Cobol, ASM, REXX, CLIST, etc.
+COBBOX1  COBBOX1  Comment designated COBOL lines which start in column 1
+COBBOX7  COBBOX7  Comment COBOL lines which start in column 8
+COLUTIL  ?        MOVE, COPY or SWAP data from one range of cols to another
+COMMENTS COMMENTS Find all the comments in clists
+COMP     COMPRESS Compress current PDS in place
+COMPRESS COMPRESS Compress current PDS in place
+CONLY    CONLY    Change all PARM1 to PARM2 and then display only changed lines
+COUNT    COUNT    Count all occurrences of a character string
+CSVEDIT  CSVEDIT  Convert report to comma separated values
+CX       CX       Change all parm1 to parm2 and display only changed lines
+D        D        Delete lines to the "T" top or "B" bottom of the editor
+DB       None Delete all lines from the line the cursor is on to the bottom line
+DELDUPS  None  Delete the duplicate lines from file optional columns specified
+DELNUM   ?        Delete a column of numbers within the editor
+DELNX    none     Delete all lines containing certain string
+DELX     none     Delete all lines except containing certain string
+DL       none     Does an ISPF 3.4 on DSN cursor point and shoot
+DM       DM       Delete a member of the current PDS. You will be prompted
+DROPDUPS none     Sort current file and delete duplicate lines
+DSI      DSI      ISPF 3.2 cursor point and shoot, current, or named DSN
+DSIGENP  DSIGENP  Create IEBCOPY JCL to copy a PDS
+DSIGENS  DSIGENS  Create IEBGENER JCL to copy a sequential
+DSN32    none     Put ISPF 3.2 information at top of current dataset
+DT   none  Delete all lines from the line the cursor is on to the top line
+E        E        Recursive edit
+EDITDSN  EDITDSN  Edit specified DSN
+EDITMAIL none     Email the current PDS member or file
+EMAILIT  none     Email the current PDS member or file
+EOL EOL Place cursor after the last non-blank character on the line
+EXCL     none     Exclude lines containing a certain string
+EXEC     EXEC     Execute the member you are currently editing
+EX2BAR   ?help    Convert exclamation marks (!) to vertical bars (|)
+FC       FC       Find pending edit line commands
+FD  FD       Find and delete all lines containing specified character string
+FILL     FILL     Replaces data in specified columns with user supplied data
+FIXJCL   FIXJCL   Tidy up your JCL
+FS       none     Full screen browse of TSO command results
+FSE      none     Full screen edit of TSO command results
+FX       FX       Find occurrence of data and next 'x' specified lines
+GENNUMS  GENNUMS  Generate numbers replacing x starting with y incremented by z
+GLUE     ?        Compliment CLIP
+IMACOFF  none     Removes an initial edit macro. Same as "IMACRO NONE"
+INCL     none     Include lines containing a certain string
+INDEX    ?        Adds a description to the $$$INDEX member of the PDS
+INFO     INFO     Get info on current dataset as "notes" in current file
+INSERT INSERT Insert character string either after or before nonexcluded lines
+JC       JC       Add JOBCARD modeled after Settings;Log/List;JCL
+JCLBOX   JCLBOX   Comment out JCL lines marked by C or CC
+JESPRINT ?        Print to JES LOCAL printer. Use TPRINT instead
+JOBCARD  none     Add JOBCARD
+KOPY     KOPY     Copy this member into a "new member name" & go edit it now
+LCASE    LCASE    Make member lowercase
+MCOL     ?        Move columns but does not destroy destination columns
+NONUMS   ?        Unnumber a PDS member (dangerous does renum then nonum)
+ONLY ONLY "Only" the lines containing the search string will be displayed
+PBOX     PBOX     Draw flowchart like boxes
+PREFIX   PREFIX   Add a prefix to the beginning of a line before first non blank
+PROLOG   none     Document new REXX routine with PROLOG box at top
+QCREATE  QCREATE  Quick create Same as CREATE new member with C99999
+QPRINT   QPRINT   Print to JES LOCAL printer. Use TPRINT instead
+QREP     QREP     Quick replace Same as REPLACE old member with C99999
+REDISP   REDISP   Arrange DISP=SHR,DSN= parameters
+REXXFORM #RXFM    REXX Code Format and do/select/end checker
+RJUST    RJUST    Right justify text marked with C or CC
+RNAME    RNAME    Rename member oldmbr,newmbr{,NO} and confirm or no confirm
+RUNC     #RUNC    Execute TSO/ISPF commands found in edit data
+SAVEAS   ?        Saves the selected (or all) data to another dataset
+SCANPDS  none     Scan the current PDS for a specified data string
+SEARCH   ?        Excludes all lines not matching operand. Can do column limits
+SENDTO   SENDTO   Copies current file to common dataset and message to recipient
+SHIFT    SHIFT    Shift columnar data area
+SHOWCOPY ?        Show COBOL COPY book, place cursor on statement
+SHOWDCB  SHOWDCB  Show the DCB of the dataset being edited
+SHOWPROC SHOWPROC Insert proc as notelines into JCL
+SORTDUPS SORTDUPS Sort the dataset and find and/or delete the duplicate records
+SPELLC   SPELLCH  Spell check the current document with opt. personal dictionary
+SPELLCA  none     Adds the word at the cursor to the users personal dictionary
+ST       ST       Super Type puts block letters into the member
+SUFFIX   SUFFIX   Adds supplied character string to end of each nonexcluded line
+SUM      SUM      Sum a column of numbers on nonexcluded lines
+TIME     TIME     Get the current time and date
+TRYIT #TRYIT Execute the current CLIST, REXX. Check JCL, Display Panel, Tutorial
+TPRINT   ?        Print to terminal printers. Enter command TPRINT ? for details
+UCASE    UCASE    Make entire member upper case
+WCUT     WCUT     Windows cut for non PCs
+WPASTE   none     Windows paste works with WCUT
+ZOOM     ZOOM     Cursor sensitive edit
+ZOOMB    ZOOM     Cursor sensitive Browse

@@ -1,0 +1,32 @@
+)ATTR DEFAULT(@$_)
+   @   TYPE(TEXT)  INTENS(HIGH) SKIP(ON)
+   $   TYPE(TEXT)  INTENS(LOW)  SKIP(ON) COLOR(GREEN)
+   _   TYPE(INPUT) INTENS(HIGH) CAPS(ON) JUST(LEFT) HILITE(USCORE)
+)BODY EXPAND(\\)
+@Tutorial$-\-\-(@RUNC - Edit Macro$)-\-\-@Tutorial
+@Command ===>_ZCMD
+$
+$Special Symbolics
+$                                                                              @
+$ @&&DATE    $USA Date (mm/dd/yy)         @&&SDATE   $Standard Date (yyyymmdd) @
+$ @&&DD      $2 digit Day of Month        @&&SMFID   $Active SMFID for the LPAR@
+$ @&&DOY     $Day of year (e.g. 001)      @&&SYSNAME $Active LPAR Name         @
+$ @&&EDATE   $European Date (dd/mm/yy)    @&&SYSID   $1 Character System Name  @
+$ @&&HHMM    $Hours and Minutes           @&&SYSPLEX $Active SYSPLEX Name      @
+$ @&&JDATE   $Julian Date (e.g. 16001)    @&&SYSPREF $Current TSO Prefix       @
+$ @&&JULIAN  $Julian Date                 @&&SYSSMFID$Active SMFID for the LPAR@
+$ @&&LPAR    $Active LPAR Name            @&&SYSUID  $Current userid           @
+$ @&&MM      $2 digit Month               @&&UDATE   $USA Date (mm/dd/yy)      @
+$ @&&MONTH   $Month (e.g. January)        @&&USERID  $Current userid           @
+$ @&&ODATE   $Ordered Date (yy/mm/dd)     @&&USERIDL $Current userid lower case@
+$ @&&PREFIX  $Current TSO Prefix          @&&WEEKDAY $Day of Week (e.g. Monday)@
+$ @&&RDSN    $Current dataset             @&&YY      $2 digit Year             @
+$ @&&RMBR    $Current member              @&&YYYY    $4 digit Year             @
+$ @&&RMEM    $Current member                                                   @
+$                                                                              @
+$                                                                              @
+$ \ \ (press@ENTER$to continue) \ \
+)PROC
+  &ZUP     = #RUNC6
+  &ZCONT   = #RUNC8
+)END

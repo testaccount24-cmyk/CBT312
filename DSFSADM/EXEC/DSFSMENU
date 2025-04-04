@@ -1,0 +1,464 @@
+  /* - -----------------  rexx procedure  -------------------- */
+  ver = '1.9'
+  /* Name:      dsfsmenu                                       |
+  |                                                            |
+  | Function:  Display menu's for the management by sysprog    |
+  |           and user of DSFS.                                |
+  |                                                            |
+  | Syntax:    %dsfsmenu option                                |
+  |                                                            |
+  |            options:                                        |
+  |                Admin (A) Administration Menu               |
+  |                dsadm (D) dsadm (user and admin)            |
+  |                user  (U) dsadm (user only)                 |
+  |                                                            |
+  | Usage Notes:  Operator requires ability to issue operator  |
+  |               commands using SDSF                          |
+  |                                                            |
+  | Dependencies: DSFS must be active and the /dsfs mount      |
+  |               point must exist                             |
+  |                                                            |
+  | Elements:  Panels                                          |
+  |             dsfsadm                                        |
+  |             dsfsdsa                                        |
+  |             dsfsconf                                       |
+  |             dsfscre                                        |
+  |             dsfstutr                                       |
+  |             dsfsusr                                        |
+  |             ...                                            |
+  |            Messages                                        |
+  |             isrz002 (IBM generic)                          |
+  |            Exec                                            |
+  |             dsfsadm  - used to altlib/libdef and invoke    |
+  |             dsfsmenu (this exec)                           |
+  |                                                            |
+  | Author:    Lionel B. Dyck                                  |
+  |                                                            |
+  | History:  (most recent on top)                             |
+  |            2024/01/30 LBD - version 1.9                    |
+  |                           - add level option               |
+  |            2024/01/28 LBD - version 1.8                    |
+  |                           - remove space after cyl         |
+  |            2024/01/19 LBD - version 1.7                    |
+  |                           - add data/mgmt/stor class to    |
+  |                             createparm                     |
+  |            2023/10/09 LBD - version 1.6                    |
+  |                           - add confirmation popup         |
+  |            2023/10/02 LBD - version 1.5                    |
+  |                           - several minor updates          |
+  |            2023/09/30 LBD - version 1.4                    |
+  |                           - improve createparm report      |
+  |            2023/09/18 LBD - Version 1.3                    |
+  |                           - bug fix on query               |
+  |            2023/09/18 LBD - Version 1.2                    |
+  |                           - restore space for createparm   |
+  |                             after getting the syntax right |
+  |            2023/09/18 LBD - Version 1.1                    |
+  |                           - Remove space for createparm    |
+  |            2023/09/17 LBD - Version 1.0                    |
+  |            2023/09/16 LBD - Redo display of help info      |
+  |            2023/09/05 LBD - Improve nesting                |
+  |                           - fixup stems remove nulls       |
+  |            2023/09/04 LBD - Improve help display           |
+  |            2023/09/04 LBD - split out user and cleanup     |
+  |            2023/09/03 LBD - multiple options for query     |
+  |            2023/09/02 LBD - ready for alpha testing        |
+  |            2023/08/28 LBD - Small updates                  |
+  |            2023/08/20 LBD - Creation                       |
+  |                                                            |
+  * ---------------------------------------------------------- */
+  arg option
+
+  /* ------------------- *
+  | Define our defaults |
+  * ------------------- */
+  parse value '' with null
+  zerrhm   = 'dsfstutr'
+  zerrhm   = null
+  zerralrm = 'NO'
+  zerrtp   = 'Notify'
+
+  Address ISPExec
+  'control errors return'
+
+  if option /= null then
+  if pos(left(option,1),'ADU') = 0 then do
+    zerrsm  = ''
+    zerrlm  = 'This application requires an option of Admin (A), ' ,
+      'dsadm (D) or user (U)' ,
+      'or blank (for User to operate.  Try again.'
+    'Setmsg msg(isrz002)'
+    exit 8
+  end
+
+  if option = null then option = 'U'
+
+  /* ------------------------- *
+  | validate /dsfs if mounted |
+  * ------------------------- */
+  file = '/dsfs'
+  rc = exist(file)
+  if rc = 0 then do
+    zerrsm  = ''
+    zerrlm  = 'It does not appear that DSFS is active as the /dsfs' ,
+      'mount point does not exist. Try again after contacting systems' ,
+      'programming for help.'
+    'Setmsg msg(isrz002)'
+    exit 8
+  end
+
+Start:
+  if option = 'A' then call do_Admin
+  if option = 'D' then call do_dsadm
+  if option = 'U' then call do_dsadm
+  return 0
+
+  /* ------------------------------- *
+  | Process the DsAdm DSADM commands |
+  * ------------------------------- */
+Do_Dsadm:
+  Do Forever
+    zcmd = null
+    if option = 'D'
+    then 'Display Panel(dsfsdsa)'
+    else 'Display Panel(dsfsusr)'
+    if rc > 3 then return 0
+    if zcmd /= null then
+    if option = 'D' then
+    parse value '1 2 3 4 5 6 7 8' with o1 o2 o3 o4 o5 o8
+    if option = 'U' then
+    parse value 'x 1 2 3 4 5 6' with o1 o2 o3 o4 o5 o6 o8
+    Select
+      When zcmd = o1 then x = do_omvs_command('dsadm configquery -all')
+      When zcmd = o2 then do
+        /* --------------------Samples--------------------------------- *
+        | dsadm createparm -path /dsfs/txt/user1 -psmodel              |
+        | "cyl dsorg(ps) lrecl(300) recfm(vb) space(20,10) blksize(0)" |
+        |                                                              |
+        | dsadm createparm -path /dsfs/txt/user1  -pdsmodel            |
+        | "cyl dsorg(po) lrecl(180) recfm(fb) space(20,10) blksize(0)  |
+        | dsntype(library)"                                            |
+        |                                                              |
+        | bin rec txt po ps fb vb lrecl blksz trk cyl prim sec         |
+        * ------------------------------------------------------------ */
+        zcmd = null
+        do forever
+          'display panel(dsfscre)'
+          if rc > 4 then leave
+          if bin /= null then type = 'bin'
+          if rec /= null then type = 'rec'
+          if txt /= null then type = 'txt'
+          cmd = 'dsadm createparm -path /dsfs/'type'/'lower(hlq)
+          if ps /= null then cmd = cmd '-psmodel "dsorg(ps)'
+          if po /= null then cmd = cmd '-pdsmodel "dsorg(po) dsntype(library)'
+          if fb /= null then cmd = cmd 'recfm(fb)'
+          if vb /= null then cmd = cmd 'recfm(vb)'
+          if datac /= null then cmd = cmd 'dataclas('datac')'
+          if mgmtc /= null then cmd = cmd 'mgmtclas('mgmtc')'
+          if storc /= null then cmd = cmd 'storclas('storc')'
+          if trk /= null then cmd = cmd 'tracks space('prim','sec')'
+          if cyl /= null then cmd = cmd 'cyl space('prim','sec')'
+          cmd = cmd 'lrecl('lrecl') blksize('blksz')"' ,
+               '&& echo "return code:" $?' ,
+               '&& echo "'copies('-',72)'"' ,
+               '&& echo "Filefino report" ',
+               '&& dsadm fileinfo -path /dsfs/'type'/'lower(hlq)
+          x = do_omvs_command(cmd)
+        end
+      end
+      When zcmd = o3 then x = do_omvs_command('dsadm fileinfo -path' fipath)
+      When zcmd = o4 then x = do_omvs_command('dsadm fsinfo')
+      When zcmd = o5 then x = do_omvs_command('dsadm help -topic' dshelp)
+      When zcmd = o6 then x = do_omvs_command('dsadm query 'qopt)
+      When zcmd = o7 then x = do_omvs_command('dsadm salvage' salopt)
+      When zcmd = o8 then x = do_omvs_command('dsadm level')
+      Otherwise nop /* should never get here */
+    end
+  end
+  return 0
+
+  /* ----------------------------------------------------- *
+  | Process the DSFS Operator Operator Commands using SDSF |
+  * ----------------------------------------------------- */
+Do_Admin:
+  Do Forever
+    zcmd = null
+    'Display Panel(dsfsadm)'
+    if rc > 3 then return 0
+    Select
+      When zcmd = 1 then do
+           rc = prompt('Confirm DSFS Abort')
+           if rc = 0 then
+           x = do_zos_command('F DSFS,Abort')
+           end
+      When zcmd = 2 then do
+           rc = prompt('Confirm DSFS Dump')
+           if rc = 0 then
+           x = do_zos_command('F DSFS,Dump')
+           end
+      When zcmd = 3 then x = do_zos_command('F DSFS,fsinfo')
+      When zcmd = 4 then x = do_zos_command('F DSFS,Query,All')
+      When zcmd = 5 then do
+           rc = prompt('Confirm DSFS Statistic Reset')
+           if rc = 0 then
+           x = do_zos_command('F DSFS,Reset')
+           end
+      When zcmd = 6 then do
+        save_opt = option
+        option = 'D'
+        x = start()
+        option = save_opt
+        call start
+        return 0
+      end
+      When zcmd = 7 then do
+        save_opt = option
+        option = 'U'
+        x = start()
+        option = save_opt
+        call start
+        return 0
+      end
+      When zcmd = 8 then x = do_omvs_command('dsadm level')
+      Otherwise nop
+    end
+  end
+  return 0
+
+  /* --------------------------------- *
+   | Prompt for Confirmation of Action |
+   * --------------------------------- */
+Prompt:
+  parse arg prompt
+  dsfsconf = null
+  address ispexec
+  'addpop'
+  'display panel(dsfsconf)'
+  drc = rc
+  'rempop'
+  if dsfsconf = null then return 4
+  return 0
+
+
+  /* ----------------------------------- *
+  | Process the z/OS command using SDSF |
+  * ----------------------------------- */
+Do_zOS_Command:
+  parse arg zoscmd
+  isfcons = sysvar('sysuid')
+  rc = isfcalls('on')
+  Address SDSF "ISFSLASH '"zoscmd"' (WAIT)"
+  rc = view_it('ISF')
+  xc = isfcalls('off')
+  return 0
+
+  /* ---------------------------------------- *
+  | Process the omvs commands using bpxwunix |
+  * ---------------------------------------- */
+Do_OMVS_Command:
+  parse arg ocmd
+  drop s. e.
+  x = bpxwunix(ocmd,,s.,e.)
+  is = s.0 + 1
+  s.is = ' '
+  is = is + 1
+  head = 'Generated command:' ocmd
+  s.is = copies('-',length(head))
+  is = is + 1
+  s.is = head
+  s.0 = is
+  parse value ocmd with . '-topic' dsfshelp
+  rc = view_it('S')
+  return 0
+
+  /* --------------------------------------------------------------- *
+  | This routine will take the stem variables isfulog (from sdsf)   |
+  | and s (from bpxwunix) and replace empty stem values with a      |
+  | single blank (to prevent execio from stopping).                 |
+  |                                                                 |
+  | Then perform various processes to clean up the resulting report |
+  | and place the data into a temporary dataset for browsing.       |
+  * --------------------------------------------------------------- */
+View_It:
+  arg vopt
+  maxl = 0
+  Address TSO
+  /* --------------------------------------------- *
+  | Process the SDSF stem (isfulog.) for browsing |
+  * --------------------------------------------- */
+  if vopt = 'ISF' then do
+    do i = 1 to isfulog.0
+      if length(isfulog.i) > maxl then maxl = length(isfulog.i)
+      if strip(isfulog.i) = null then isfulog.i = ' '
+    end
+    x = alloc_view()
+    'execio * diskw' dd '(finis stem isfulog.'
+  end
+  /* ------------------------------------------- *
+  | Process the bpxwunix stem (s.) for browsing |
+  | This is rather ugly but it is what it is... |
+  * ------------------------------------------- */
+  if vopt = 'S' then do
+    do i = 1 to s.0
+      if length(s.i) > maxl then maxl = length(s.i)
+      if strip(s.i) = null then s.i = ' '
+    end
+    do i = 1 to e.0
+      if length(e.i) > maxl then maxl = length(e.i)
+      if strip(e.i) = null then e.i = ' '
+    end
+    if maxl > 80 then do
+      drop sc.
+      sc = 0
+      ind = 0
+      Select
+        When word(ocmd,2) = 'help' then do
+          parse value s.1 with . cmd':'
+          call add_line s.1
+          call add_line subword(s.2,1,4)
+          if wordpos(word(s.2,4),'fileinfo salvage') = 0 then do
+            ind = pos(':',s.2)+1
+            if pos('Ý{',s.2) > 0 then do
+              parse value s.2 with . 'Ý{' data '}¨' last
+              parse value data with opt '|' data   /* 1st option */
+              call add_line 'Ý{' opt
+              parse value data with ' -'opt '| -'data
+              call add_line ' | -'opt
+              data = '-'data
+              do forever
+                parse value data with '-'opt '| -'data
+                data = '-'data
+                if strip(opt) = null then leave
+                call add_line ' | -'opt
+                if pos('|',data) = 0 then leave
+              end
+              if strip(data) /= '-'
+              then call add_line ' | 'data
+              sn.sc = sn.sc '}¨'
+              data = last
+            end
+            else parse value s.2 with . ':' . . data
+            if pos('Ý',data) > 2 then do
+              parse value data with opt 'Ý'data
+              call add_line opt
+            end
+            do forever
+              parse value data with 'Ý'opt'¨' data
+              call add_line 'Ý'opt'¨'
+              if strip(data) = null then leave
+            end
+          end
+          else do
+            call add_line subword(s.2,1,4)
+            ind = pos(':',s.2)+1
+            call add_line subword(s.2,5)
+          end
+        end
+        When pos('dsadm query',ocmd) > 0 then do i = 1 to s.0
+          call add_line s.i
+        end
+        When pos('dsadm createparm',ocmd) > 0 then do
+           do i = 1 to s.0
+             call add_line s.i
+           end
+           if e.0 > 0 then do ie = 1 to e.0
+              call add_line e.ie
+              end
+        end
+        When pos('dsadm helpy',ocm) = 0 then do i = 1 to s.0
+          call add_line s.i
+        end
+        When pos('dsadm createparm',ocmd) > 0 then do
+           do i = 1 to s.0
+             call add_line s.i
+           end
+           if e.0 > 0 then call add_line e.1
+        end
+        otherwise do i = 1 to s.0
+          if length(s.i) > 80 then do  while length(s.i) > 80
+            lp = lastpos('Ý-',s.i,80) - 1
+            if lp < 0 then lp = 0
+            data = left(s.i,lp)
+            if ind = 0 then
+            if wordpos('Usage:',data) > 0 then
+            ind = pos(word(s.i,5),data) - 2
+            s.i = strip(substr(s.i,lp))
+            sc = sc + 1
+            if pos('Usage:',data) > 0
+            then sn.sc = data
+            else sn.sc = copies(' ',ind)''data
+          end
+          if pos('---------',s.i) > 0 then ind = 0
+          sc = sc + 1
+          if pos('Usage:',data) > 0
+          then sn.sc = s.i
+          else sn.sc = copies(' ',ind)''s.i
+          sn.0 = sc
+        end
+      end
+      drop s.
+      do i = 1 to sc
+        s.i = sn.i
+      end
+    end
+    x = alloc_view()
+    'execio * diskw' dd '(finis stem s.'
+  end
+  /* --------------------------------------------------- *
+  | Use ISPF Services to browse the generated report(s) |
+  * --------------------------------------------------- */
+  Address ISPExec
+  'lminit dataid(ddb) ddname('dd')'
+  'browse dataid('ddb')'
+  'lmfree dataid('ddb')'
+  Address TSO ,
+    'free f('dd')'
+  Return 0
+
+  /* ------------------------------- *
+  | Add line of text to output stem |
+  * ------------------------------- */
+add_line:
+  parse arg line
+  sc = sc + 1
+  sn.sc = copies(' ',ind)''line
+  sn.0 = sc
+  return
+
+  /* ----------------------------------------- *
+  | Allocate the temporary dataset to be used |
+  | for browsing the generated reports        |
+  * ----------------------------------------- */
+Alloc_View:
+  dd = 'ds'time('s')
+  Address TSO ,
+    'alloc f('dd') space(15,15) tr unit(vio) recfm(v b) lrecl('maxl+4')' ,
+    'blksize(0) new'
+  return 0
+
+  /* ----------------------------------- *
+  | Routine to validate if /dsfs exists |
+  * ----------------------------------- */
+Exist: Procedure
+  parse arg file
+  x = syscalls('ON')
+  address syscall ,
+    'stat (file) st.'
+  x = syscalls('OFF')
+  return st.0
+
+  /* ------------------------------------- *
+  * Name:     Lower                       *
+  *                                       *
+  * Function: Lowercase the provided data *
+  *                                       *
+  * Syntax:   x=lower(input)              *
+  *                                       *
+  * History:                              *
+  *           08/17/07: created           *
+  * ------------------------------------- */
+Lower:
+  parse arg input
+  out = translate(input,"abcdefghijklmnopqrstuvwxyz",,
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+  return out

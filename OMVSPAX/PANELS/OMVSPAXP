@@ -1,0 +1,19 @@
+)Attr Default(%+_)
+   @ type(output) caps(off) just(left ) hilite(uscore) color(green)
+)Body Window(65,7) Expand(\\)
+%
+%Backup Command:
+@c1
+@c2
+@c3
++
++The PAX operation is proceeding. Be patient until it completes.
+)Init
+ &zwinttl = 'OMVS PAX Backup in Process'
+ *REXX(* cmd)
+ c1 = left(cmd,64)
+ c2 = substr(cmd,65,128)
+ c3 = substr(cmd,129)
+ *ENDREXX
+)Proc
+)End

@@ -1,0 +1,2425 @@
+/* --------------------  rexx procedure  -------------------- */
+  ver = '2.20'
+/*Name:      OMVSCOPY                                        |
+|                                                            |
+| Function:  ISPF Dialog to drive the IBM TSO OCOPY command. |
+|                                                            |
+|            - Copy z/OS data set to an OMVS file            |
+|            - Copy an OMVS file to a z/OS data set          |
+|                                                            |
+|            - Optionally generate Batch JCL                 |
+|                                                            |
+| Syntax:    %omvscopy from to options                       |
+|                                                            |
+|            from is the target data set or file             |
+|                 or may be a HLQ if it ends with *          |
+|                 or may be a OMVS Path ending with /        |
+|            to is the target data set or file               |
+|                                                            |
+|            options - any valid OCOPY options               |
+|               Disp is R to replace/overlay                 |
+|                    or C to create new                      |
+|               Binary or Text                               |
+|               TO1047 or FROM1047                           |
+|                                                            |
+|            Options for z/OS target data set:               |
+|               LRECL lrecl                                  |
+|               RECFM recfm (FB, VB, ...)                    |
+|               SPACE nn (space in tracks to allocate)       |
+|               UNIT esoteric (e.g. 3390)                    |
+|               VOL volser                                   |
+|                                                            |
+|            Options for OMVS target file:                   |
+|               PERM xxx                                     |
+|                                                            |
+| Commands:  FLip to swap the Input and Output fields        |
+|            Set to change colors and reset Disp and Exec    |
+|                                                            |
+| Defaults:  PERM 640                                        |
+|            SPACE 5                                         |
+|            RECFM VB                                        |
+|            LRECL 255                                       |
+|                                                            |
+| Dependencies:                                              |
+|            1. See *custom* to use ISPF default job card    |
+|               and system affinity, and more.               |
+|            2. Batch JCL must run on the current LPAR       |
+|               unless the OMVS files (zFS) are shared.      |
+|                                                            |
+| Author:    Lionel B. Dyck                                  |
+|                                                            |
+| History:  (most recent on top)                             |
+|            08/10/18 - V2.20                                |
+|                     - Use SYSCALL services for CD          |
+|            08/07/18 - V2.18                                |
+|                     - Support additional CD options        |
+|            07/31/18 - V2.17                                |
+|                     - OMVS dialog cleanup                  |
+|            07/30/18 - V2.16                                |
+|                     - Enable S to list sub-directory       |
+|            07/27/18 - V2.15                                |
+|                     - Enable CD ~/subdir                   |
+|                     - Fix CD info in tutorial panel        |
+|            07/16/18 - V2.14                                |
+|                     - Correct cancel from PDS selection    |
+|            07/16/18 - V2.13                                |
+|                     - Correct handling of empty pds        |
+|                     - Correct color for % and + on panels  |
+|            07/13/18 - V2.12                                |
+|                     - Correct handling of cd ~ that broke  |
+|            07/13/18 - V2.11                                |
+|                     - Correct handling of cd dir if dir    |
+|                       is entered without . or /            |
+|            07/12/18 - V2.10                                |
+|                     - Report access violation in obrowse   |
+|                       from the OMVS file list option B     |
+|            07/12/18 - V2.09                                |
+|                     - Tutorial cleanup (thx BK)            |
+|            07/11/18 - V2.08                                |
+|                     - Add SuperUser option                 |
+|                     - Clean up and set defaults            |
+|                     - Add color default for Input fields   |
+|                     - Add default for space alloc          |
+|            07/10/18 - V2.07                                |
+|                     - Allow multiple Browse selections     |
+|                     - Add SET command                      |
+|            07/06/18 - V2.06                                |
+|                     - Correct testing for Input to use     |
+|                       VER DSNAMEFM if dsname               |
+|            07/05/18 - V2.05                                |
+|                     - Remove VER DSNAMEFM for Input        |
+|            07/02/18 - V2.04                                |
+|                     - Clean up CD processing - more robust |
+|                     - Add tutorial panel on just CD usage  |
+|            06/28/18 - V2.03                                |
+|                     - Add ISPF message (inline) OMC00      |
+|                       with reference to main help panel    |
+|                     - Change ISPF message from ISRZ001     |
+|                       to OMC000                            |
+|            06/28/18 - V2.02                                |
+|                     - Fix for incomplete DSNs: VER DSNAMEFM|
+|                     - Make input and output scrollable     |
+|            06/27/18 - V2.01                                |
+|                     - Always run under APPLID=ISR          |
+|                     - Remove ROUTE and MAIN statements     |
+|                       and insert SYSTEM=xxx in JOB card    |
+|                     - Save Input and Output info in profile|
+|                     - Add FLip command to swap in/out      |
+|                     - Clean up return from OMVS Dir list   |
+|            06/26/18 - V2.00                                |
+|                     - Declare GA                           |
+|            06/21/18 - V1.99                                |
+|                     - Add Batch or Foreground option       |
+|            06/20/18 - V1.01                                |
+|                     - Clean up defaults                    |
+|            06/18/18 - V1.00                                |
+|                     - after much alpha/beta testing this   |
+|                       is now ready to be released          |
+|            06/07/18 - Creation                             |
+|                                                            |
+* ---------------------------------------------------------- */
+  parse arg omcfrom omcto options
+
+/* *custom* *custom* *custom* *custom* *custom*  *
+| ---------------------------------------------- |
+| Change this to use the ISPF default            |
+|            job card statements                 |
+|  use_ispf_jcard   0 = generate  1 = use        |
+| ---------------------------------------------- |
+|  Change this to enable or disable system       |
+|  affinity: adding SYSTEM=sysname to the JOB    |
+|  card.                                         |
+|  omcdtrks         default trks for new alloc   |
+|  sysaff           0 = none      1 = yes        |
+|  settings         0 only display with SET cmd  |
+|                   1 display 1st time used      |
+* --------------------------------------------- */
+  use_ispf_jcard = 0
+  sysaff         = 1
+  settings       = 1
+  omcdtrks       = 5
+
+/* *custom* *custom* *custom* *custom* *custom*  *custom*  *
+ | Define User Settings Defaults                           |
+ |                                                         |
+ | Available Colors:                                       |
+ | Blue, Green, Pink, Red, Turq, White, Yellow             |
+ |                                                         |
+ | Reverse may be Reverse or null                          |
+ |                                                         |
+ | Reset Create/Replace to blank - Y or N  (N)             |
+ | Reset Execution mode to blank - Y or N  (N)             |
+ |                                                         |
+ * ------------------------------------------------------- */
+  tomccinp  = 'Red'
+  tomcclow  = 'Blue'
+  tomcchigh = 'Turq'
+  tomccrev  = 'Reverse'
+  tomcucr   = 'N'
+  tomcrem   = 'N'
+
+/* ---------------------------------------- *
+| Check to see if we are under ISPF or not |
+* ---------------------------------------- */
+  env = sysvar('sysenv')
+  if env = 'FORE' then do
+    if sysvar('sysispf') /= 'ACTIVE'
+    then do
+      say 'Error....'
+      say '%OMVSCOPY may only be used under ISPF.'
+      say 'Exiting'
+      exit 16
+    end
+  end
+  else do
+    say 'Error....'
+    say '%OMVSCOPY may only be used under ISPF under TSO.'
+    say 'Exiting'
+    exit 16
+  end
+
+/* -------------------------------------------- *
+ | Check and make sure running under ISR Applid |
+ * -------------------------------------------- */
+  Address ISPEXEC
+  "VGET ZAPPLID"
+  if zapplid <> "ISR" then do
+    "Select CMD(%"sysvar('sysicmd') options ") Newappl(ISR)" ,
+      "Passlib"
+    exit 0
+  end
+
+/* --------------- *
+| Define defaults |
+* --------------- */
+  parse value '' with null omcsm omclm bad load_info fixup ,
+    omcbintx omct1047 omcf1047 omcrf omclrec omctrks omcperm
+  Address ISPExec
+
+/* ------------------------------ *
+ | Load ISPF Elements dynamically |
+ * ------------------------------ */
+  load_info = loadispf()
+
+/* --------------------------------------- *
+ | If Settings = 1 then Display if 1st use |
+ * --------------------------------------- */
+  'vget (omccinp omcclow omcchigh omccrev omcset omcucr omcrem) profile'
+  if settings = 1 then
+  if omcset = null then do forever
+    'Display Panel(omcset)'
+    if rc > 0 then leave
+  end
+  if omccinp = null then
+  omccinp = tomccinp
+  if omcclow = null then
+  omcclow = tomcclow
+  if omcchigh = null then
+  omcchigh = tomcchigh
+  if omccrev = null then
+  omccrev = tomccrev
+  if omcccur = null then
+  omcccur = tomcccur
+  if omccrem = null then
+  omccrem = tomccrem
+
+/* ---------------------------- *
+| Process the Options (if any) |
+* ---------------------------- */
+  options = translate(options)
+  do until length(options) = 0
+    Select
+      when word(options,1) = 'BINARY' then do
+        options = subword(options,2)
+        omcbintx = 'Y'
+      end
+      when word(options,1) = 'TEXT' then do
+        options = subword(options,2)
+        omcbintx = 'N'
+      end
+      when word(options,1) = 'LRECL' then do
+        omclrec = subword(options,2,1)
+        options = subword(options,3)
+      end
+      when word(options,1) = 'RECFM' then do
+        omcrf = subword(options,2,1)
+        options = subword(options,3)
+      end
+      when word(options,1) = 'SPACE' then do
+        omctrks = subword(options,2,1)
+        options = subword(options,3)
+      end
+      when word(options,1) = 'PERM' then do
+        omcperm = subword(options,2,1)
+        options = subword(options,3)
+      end
+      when word(options,1) = 'UNIT' then do
+        omcunit = subword(options,2,1)
+        options = subword(options,3)
+      end
+      when word(options,1) = 'VOLSER' then do
+        omcvol  = subword(options,2,1)
+        options = subword(options,3)
+      end
+      when word(options,1) = 'TO1047' then do
+        omct1047 = subword(options,2,1)
+        options = subword(options,3)
+      end
+      when word(options,1) = 'FROM1047' then do
+        omcf1047  = subword(options,2,1)
+        options   = subword(options,3)
+      end
+      otherwise do
+        bad = bad word(options,1)
+        options = subword(options,2)
+      end
+    end
+    if bad /= null then do
+      omcsm = 'Errors.'
+      omclm = 'Invalid options:' bad
+    end
+  end
+  if omcsm /= null then
+  'Setmsg msg(omc000)'
+
+/* ---------------------------------------- *
+ | Define the allocation defaults           |
+ * ---------------------------------------- */
+  if omcperm = null then omcperm = '640'
+  if omclrec = null then do
+    'vget (omclrec) profile'
+    if omclrec = null then omclrec = 255
+  end
+  if omcrf = null then do
+    'vget (omcrf) profile'
+    if omcrf = null then omcrf = 'VB'
+  end
+  if omctrks = null then do
+    'vget (omctrks) profile'
+    if omctrks = null then omctrks = omcdtrks
+  end
+  'vput (omcperm omclrec omcrf omctrks) profile'
+
+/* ------------------------------------ *
+| Get the users default Home directory |
+* ------------------------------------ */
+  call syscalls('ON')
+  address syscall "getpwnam" userid() "pw."
+  home_dir = pw.pw_dir'/'
+
+/* -------------------------------------------- *
+| convert \ to / to help out our windows users |
+* -------------------------------------------- */
+  omcfrom = translate(omcfrom,'61'x,'e0'x)
+  omcto = translate(omcto,'61'x,'e0'x)
+
+/* ---------------------- *
+| Display the ISPF Panel |
+* ---------------------- */
+  cursor = 'omcfrom'
+  olduid = 0
+  omcsumsg = null
+  omcsurev = null
+  'vput (omcsumsg omcsurev)'
+ISPF:
+  if omcucr = 'Y' then omcdisp = null
+  if omcrem = 'Y' then omcexec = null
+  do forever
+    Address ISPExec
+    if omcsm /= null then 'Setmsg msg(omc000)'
+    omcsm = null
+    cdir_flag = 0
+    'Display Panel(omvscopy)'
+    if rc = 0 then leave
+    if rc > 0 then call exit
+  end
+  Address TSO
+
+/* ------------------- *
+ | Check for SuperUser |
+ * ------------------- */
+  if olduid = 0 then
+  if omcsu = 'Y' then do
+    address syscall 'geteuid'
+    olduid = retval
+    /* now change - or try to change */
+    address syscall 'seteuid' 0
+    if retval = -1 then do
+      omcsm = 'Not Authorized.'
+      omclm = 'You are not authorized to use SuperUser.'
+      omcsu = 'N'
+    end
+    else do
+      omcsumsg = ,
+        center('Currently in SuperUser (UID(0) State - will Reset on Exit',79)
+      omcsurev = 'Reverse'
+      address ispexec 'vput (omcsumsg omcsurev)'
+    end
+  end
+  if omcsu = 'N' then
+  if olduid /= 0 then do
+    address syscall 'seteuid' olduid
+    omcsumsg = null
+    omcsurev = null
+    address ispexec 'vput (omcsumsg omcsurev)'
+    olduid = 0
+  end
+
+/* ----------------------------- *
+| Process any supported command |
+* ----------------------------- */
+  if zcmd /= null then Select
+    When translate(zcmd) = 'SET' then do forever
+      zcmd = null
+      Address ISPExec
+      'Display Panel(omcset)'
+      if rc > 0 then do
+        omcsm = 'Set Complete'
+        omclm = 'Settings updated.'
+        leave
+      end
+    end
+    When abbrev('FLIP',translate(zcmd),2) = 1
+    then do
+      hold    = omcto
+      omcto   = omcfrom
+      omcfrom = hold
+      Address ISPExec 'vput (omcto omcfrom)'
+      omcsm = 'Flipped.'
+      omclm = 'Input and Output files flipped.'
+    end
+    Otherwise do
+      omcsm = 'Unknown'
+      omclm = zcmd 'is an unknown/unsupported command.'
+    end
+  end
+  zcmd    = null
+  if omcsm /= null then signal ispf
+
+/* ------------------------------------------ *
+| Now validate and process the OCOPY request |
+* ------------------------------------------ */
+
+  parse value '' with omcsm omclm fixup
+
+/* ---------------------------------------- *
+| convert the \ to / for our windows users |
+* ---------------------------------------- */
+  omcfrom = translate(omcfrom,'61'x,'e0'x)
+  omcto = translate(omcto,'61'x,'e0'x)
+
+/* ----------------------------- *
+| Now validate the Input (omcfrom) |
+* ----------------------------- */
+  if left(omcfrom,1) = '~' then
+  omcfrom = home_dir''substr(omcfrom,3)
+  save_omcfrom = omcfrom
+  if left(omcfrom,1) = '/' then do
+    cmd = 'ls -la' omcfrom
+    rc = bpxwunix(cmd,,stdout.,stderr.)
+    if right(omcfrom,1) /= '/' then
+    if stdout.0 >= 1
+    then if left(stdout.1,1) = 'l'
+    then omcfrom = omcfrom'/'
+    if stdout.0 = 0 then do
+      omcsm = 'Invalid Input'
+      omclm = omcfrom stderr.1
+      cursor = 'omcfrom'
+    end
+  end
+
+  if right(omcfrom,1) = '/' then do
+    omcfrom = change_odir(omcfrom)
+    address ispexec 'vput (omcfrom)'
+  end
+  if translate(zcmd) = 'CANCEL' then do
+    zcmd = null
+    omcfrom = save_omcfrom
+    address ispexec 'vput (omcfrom)'
+    omcsm = 'Canceled.'
+    omclm = 'OMVS file selection canceled.'
+  end
+  if omcsm = null then do
+    if left(omcfrom,1) /= '/'
+    then if pos('*',omcfrom) > 0
+    then omcfrom = get_zos(omcfrom)
+    if translate(zcmd) = 'CANCEL' then do
+      zcmd = null
+      omcfrom = save_omcfrom
+      omcsm = 'Canceled.'
+      omclm = 'z/OS data set selection canceled.'
+    end
+  end
+
+  if omcsm = null then
+  if omcfrom = null then do
+    omcfrom = save_omcfrom
+    omcsm = 'Invalid Input'
+    omclm = 'Input may not be a directory or no data sets matched'
+    cursor = 'omcfrom'
+  end
+
+/* ------------------------------------- *
+| Convert ~ to the users Home directory |
+* ------------------------------------- */
+  if left(omcfrom,1) = '~' then omcfrom = home_dir''substr(omcfrom,3)
+  if left(omcto,1) = '~' then do
+    omcto = home_dir''substr(omcto,3)
+    Address ISPExec 'vput (omcto)'
+  end
+
+  if omcsm = null then
+  if omcfrom /= null then
+  if left(omcfrom,1) /= '/' then do
+    if sysdsn(omcfrom) /= 'OK' then do
+      omcsm = 'Invalid Input'
+      omclm = omcfrom sysdsn(omcfrom)
+      cursor = 'omcfrom'
+    end
+
+/* -------------------------------------------------------------- *
+| Validate that the Input and Output are not both z/OS data sets |
+* -------------------------------------------------------------- */
+    if left(omcto,1) /= '/' then do
+      omcsm = 'Error'
+      omclm = 'The Input and Output must not both be z/OS Data Sets'
+      cursor = 'omcfrom'
+    end
+
+    x=listdsi(omcfrom)
+    if sysdsorg = 'PO' then
+    if pos('(',omcfrom) = 0 then do
+      save_omcfrom = omcfrom
+      mfile = omcfrom
+      omcfrom = get_member()
+      if zcmd = 'CANCEL' then do
+        zcmd = null
+        omcsm = 'Canceled.'
+        omclm = 'PDS Member selection canceled.'
+        cursor = 'omcfrom'
+        omcfrom = save_omcfrom
+      end
+      address ispexec 'vput (omcfrom)'
+    end
+  end
+
+  to_exists = 0
+
+/* ------------------------ *
+| Validate the Output (To) |
+* ------------------------ */
+  if omcsm = null then
+  if left(omcto,1) = '/' then do
+    todir = lastpos('/',omcto)
+    todir = left(omcto,todir)
+    cmd = 'ls -la' todir
+    rc = bpxwunix(cmd,,stdout.,stderr.)
+    if stdout.0 = 0 then do
+      omcsm = 'Invalid Output location'
+      omclm = omcto stderr.1
+      cursor = 'omcto'
+    end
+
+/* ------------------------------------- *
+| If Replace/overlay validate it exists |
+* ------------------------------------- */
+    if omcsm = null then
+    if omcdisp = 'R' then do
+      cmd = 'ls -la' omcto
+      rc = bpxwunix(cmd,,stdout.,stderr.)
+      if stderr.0 > 0 then do
+        omcsm = 'Does Not Exist'
+        omclm = omcto stderr.1
+        cursor = 'omcto'
+        to_exists = 1
+      end
+    end
+
+/* ---------------------------------------------------- *
+| If Create (New) then validate that it does not exist |
+* ---------------------------------------------------- */
+    if omcsm = null then
+    if omcdisp = 'C' then do
+      cmd = 'ls -la' omcto
+      rc = bpxwunix(cmd,,stdout.,stderr.)
+      if stdout.0 > 0 then do
+        omcsm = 'Output Exists'
+        omclm = omcto stdout.1
+        cursor = 'omcto'
+        to_exists = 1
+      end
+    end
+  end
+
+  if omcsm = null then
+  if omcdisp = 'C' then do
+    if left(omcto,1) /= '/' then do
+      if sysdsn(omcto) = 'OK' then do
+        omcsm = 'Error'
+        omclm = 'The Output data set (or member)' ,
+          'must not currently exist and it does,' ,
+          'so change the name and try again.'
+        to_exists = 1
+        cursor = 'omcto'
+      end
+    end
+  end
+
+  if omcsm = null then
+  if omcdisp = 'R' then do
+    if left(omcto,1) /= '/' then do
+      if sysdsn(omcto) = 'OK' then do
+        x = listdsi(omcto)
+        if sysdsorg = 'PO' then
+        if pos('(',omcto) = 0 then do
+          omcsm = 'Error'
+          omclm = 'A PDS must have a member name.'
+          cursor = 'omcto'
+        end
+      end
+      else do
+        omcsm = 'Error'
+        if pos('(',omcto) = 0 ,
+          then omclm = 'Replace has been requested' ,
+          'but the Output data' ,
+          'set does not exist.'
+        else omclm = 'Replace has been requested' ,
+          'but the Output data' ,
+          'set member does not exist.'
+        cursor = 'omcto'
+      end
+    end
+  end
+
+/* ---------------------------------------------------- *
+| Validate that the input and output are not both OMVS |
+* ---------------------------------------------------- */
+  if omcsm = null then
+  if left(omcfrom,1) = '/'
+  then if left(omcto,1) = '/'
+  then do
+    omcsm = 'Error'
+    omclm = 'The Input and Output must not both be OMVS files'
+    cursor = 'omcfrom'
+  end
+
+/* --------------------------------------------------- *
+| Validate that the input and output are not the same |
+* --------------------------------------------------- */
+  if omcsm = null then
+  if omcfrom = omcto then do
+    omcsm = 'Error'
+    omclm = 'The Input and Output must not be the same.'
+    cursor = 'omcfrom'
+  end
+
+/* ------------------------------------- *
+| If any error messages then start over |
+* ------------------------------------- */
+  if omcsm /= null then
+  signal ispf
+
+/* --------------------------------------------------- *
+| Translate the Permissions to allocation values      |
+| for use in the TSO Allocate command                 |
+|                                                     |
+| SIRUSR - the file owner can read the file      400  |
+| SIWUSR - the file owner can write the file     200  |
+| SIXUSR - the file owner can execute the file   100  |
+| SIRWXU - the file owner can read/write/execute 700  |
+| SIRGRP - the group can read the file           040  |
+| SIWGRP - the group can write the file          020  |
+| SIXGRP - the group can execute the file        010  |
+| SIRWXG - the group can read/write/execute      070  |
+| SIROTH - others can read the file              004  |
+| SIWOTH - others can write the file             002  |
+| SIXOTH - others can execute the file           001  |
+| SIRWXO - others can read/write/execute         007  |
+* -------------------------------------------------- */
+  if left(omcto,1) = '/' then do
+    if omcperm = null then omcperm = '640'
+    if length(omcperm) /= 3 then do
+      omcsm = 'Invalid Perm'
+      omclm = 'Permissions must be 3 digits 000-777 and' ,
+        'must be a valid OMVS file permissions.'
+      signal ispf
+    end
+    pu = substr(omcperm,1,1)
+    Select
+      when pu = '7' then pathmode = 'SIRWXU'
+      when pu = '6' then pathmode = 'SIRUSR,SIWUSR'
+      when pu = '5' then pathmode = 'SIRUSR,SIXUSR'
+      when pu = '4' then pathmode = 'SIRUSR'
+      when pu = '3' then pathmode = 'SIWUSR,SIXUSR'
+      when pu = '2' then pathmode = 'SIWUSR'
+      when pu = '1' then pathmode = 'SIXUSR'
+      otherwise nop
+    end
+    pu = substr(omcperm,2,1)
+    Select
+      when pu = '7' then pathmode = pathmode',SIRWXG'
+      when pu = '6' then pathmode = pathmode',SIRGRP,SIWGRP'
+      when pu = '5' then pathmode = pathmode',SIRGRP,SIXGRP'
+      when pu = '4' then pathmode = pathmode',SIRGRP'
+      when pu = '3' then pathmode = pathmode',SIWGRP,SIXGRP'
+      when pu = '2' then pathmode = pathmode',SIWGRP'
+      when pu = '1' then pathmode = pathmode',SIXGRP'
+      otherwise nop
+    end
+    pu = substr(omcperm,3,1)
+    Select
+      when pu = '7' then pathmode = pathmode',SIRWXO'
+      when pu = '6' then pathmode = pathmode',SIROTH,SIWOTH'
+      when pu = '5' then pathmode = pathmode',SIROTH,SIXOTH'
+      when pu = '4' then pathmode = pathmode',SIROTH'
+      when pu = '3' then pathmode = pathmode',SIWOTH,SIXOTH'
+      when pu = '2' then pathmode = pathmode',SIWOTH'
+      when pu = '1' then pathmode = pathmode',SIXOTH'
+      otherwise nop
+    end
+  end
+
+/* ---------------------------------------- *
+| Build the Data Set Allocation parameters |
+* ---------------------------------------- */
+  if left(omcto,1) /= '/' then do
+    parse value '' with jcl_lrecl jcl_space jcl_unit ,
+      jcl_volser jcl_recfm
+
+    jcl_lrecl  = 'LRECL('omclrec')'
+    jcl_recfm = substr(omcrf,1,1)
+    jcl_recfm = jcl_recfm substr(omcrf,2,1)
+    jcl_recfm = jcl_recfm substr(omcrf,3,1)
+    jcl_recfm = 'RECFM('jcl_recfm')'
+    jcl_space  = 'SPACE('omctrks','omctrks') TRACKS'
+    if omcunit /= null then jcl_unit  = 'UNIT('omcunit')'
+    if omcvol /= null then jcl_volser = 'VOL('omcvol')'
+  end
+
+/* -------------------------- *
+| Build the OCOPY parameters |
+* -------------------------- */
+  ocopy_opts = null
+  if omcbintx = 'Y' then ocopy_opts = 'BINARY'
+  if omcbintx = 'N' then ocopy_opts = 'TEXT'
+  if omct1047 = 'Y' then ocopy_opts = ocopy_opts 'CONVERT TO1047'
+  if omcf1047 = 'Y' then ocopy_opts = ocopy_opts 'CONVERT FROM1047'
+
+  if omcexec = 'F' then do
+/* ------------------------------------------------ *
+| Build the Dynamic Allocations for the OCOPY DD's |
+* ------------------------------------------------ */
+    ddkey = random(99999)
+    fdd = 'FDD'ddkey
+    tdd = 'TDD'ddkey
+
+    if left(omcfrom,1) = '/' then do
+      "alloc f("fdd") path('"omcfrom"')" ,
+        'pathopts(ordonly)'
+    end
+    else do
+      'alloc f('fdd') shr reuse ds('omcfrom')'
+    end
+
+    alloc_rc = rc
+    if alloc_rc > 0 then do
+      Address ISPExec
+      omcsm = 'Error:' alloc_rc
+      omclm = 'Allocation of the Input DD failed with' ,
+        'return code:' alloc_rc
+      'Setmsg msg(omc000)'
+      signal ISPF
+    end
+
+    if left(omcto,1) = '/' then do
+      if omcdisp = 'C'
+      then pathopts = 'ocreat,owronly'
+      else pathopts = 'owronly'
+      "alloc f("tdd") path('"omcto"')" ,
+        'pathmode('pathmode')' ,
+        'pathopts('pathopts')'
+      alloc_rc = rc
+    end
+    else do
+      sysdsorg = null
+      x = listdsi(omcto)
+      if sysdsorg = 'PO' then omcdisp = 'R'
+      if omcdisp = 'C'
+      then anew = 'new'
+      else do
+        anew = 'shr'
+        parse value '' with jcl_lrecl jcl_space jcl_unit ,
+          jcl_volser jcl_recfm
+      end
+      'alloc f('tdd')' anew 'reuse ds('omcto')' ,
+        jcl_lrecl jcl_recfm jcl_space jcl_unit jcl_volser
+      alloc_rc = rc
+    end
+
+    if alloc_rc > 0 then do
+      'Free f('fdd')'
+      Address ISPExec
+      omcsm = 'Error:' alloc_rc
+      omclm = 'Allocation of the Output DD failed with' ,
+        'return code:' alloc_rc
+      'Setmsg msg(omc000)'
+      signal ISPF
+    end
+
+/* ------------------------- *
+| Execute the OCOPY command |
+* ------------------------- */
+    call outtrap 'oc.'
+    'ocopy indd('fdd') outdd('tdd')' ,
+      'pathopts(use)' ocopy_opts
+    call outtrap 'off'
+
+    oc_rc = rc
+
+    'Free f('fdd tdd')'
+
+    Address ISPExec
+    omcsm = null
+    omclm = left('OCOPY completed with a return code' ,
+      'of: 'oc_rc,79) ,
+      'Input:' omcfrom 'Output:' omcto
+    if oc.0 = 1 then omclm = omclm 'with' oc.1
+    'Setmsg msg(omc000)'
+
+    if left(omcto,1) = '/' then do
+      'control display save'
+      Address TSO 'OBrowse' omcto
+      'control display restore'
+    end
+    else do
+      'control display save'
+      'Browse dataset('omcto')'
+      'control display restore'
+    end
+    signal ispf
+  end
+
+/* ------------------ *
+| Generate Batch JCL |
+* ------------------ */
+  if omcexec = 'B' then do
+/* ------------------------------- *
+| Create a JOB Card for the user. |
+* ------------------------------- */
+    Address ISPExec ,
+      'vget (zacctnum zllgjob1 zllgjob2 zllgjob3 zllgjob4)'
+
+    if use_ispf_jcard = 0 then do
+      jname = sysvar('sysuid')
+      jcard = zacctnum','jname
+
+/* ------------------------- *
+| Rotate the jobname suffix |
+| but only if uid len < 8   |
+* ------------------------- */
+      sysuid = sysvar('sysuid')
+      if length('sysuid') < 8 then do
+        Address ISPExec ,
+          'vget (jsuf) profile'
+        if jsuf = null then
+        jsuf = substr(jname,length(jname))
+        if jsuf = ' ' then jsuf = '9'
+        jsuf = translate(jsuf,'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789', ,
+          '9ABCDEFGHIJKLMNOPQRSTUVWXYZ012345678')
+        Address ISPExec ,
+          'vput (jsuf) profile'
+        jname = sysuid''jsuf
+        jcl.1 = '//'left(jname,8) 'JOB' strip(jcard)',NOTIFY=&SYSUID,'
+      end
+      else jcl.1 = '//'left(jname,8) 'JOB' strip(jcard)',NOTIFY=&SYSUID,'
+
+      jcl.2 = '//             MSGLEVEL=(1,1)'
+      if omcjclas /= null then
+      jcl.2 = jcl.2',CLASS='omcjclas
+
+      jcl.3 = ,
+        '//OUT      OUTPUT DEFAULT=YES,JESDS=ALL,OUTDISP=(HOLD,HOLD)'
+
+      jcl.4 = '//*        Execute TSO OCOPY in Batch'
+    end
+
+    else do
+      jcl.1 = zllgjob1
+      jcl.2 = zllgjob2
+      jcl.3 = zllgjob3
+      jcl.4 = zllgjob4
+      if jcl.2 = null then jcl.2 = '//*'
+      if jcl.3 = null then jcl.3 = '//*'
+      if jcl.4 = null then jcl.4 = '//*'
+    end
+
+    jcl.5 = "//COPY     EXEC PGM=IKJEFT1B,DYNAMNBR=50,"
+
+    jcl.6 = "//             PARM='OCOPY INDD(IN) OUTDD(OUT)"
+    if omcbintx = 'Y' then jcl.6 = jcl.6 'BINARY '
+    else jcl.6 = jcl.6 'TEXT '
+
+    convert = null
+    if omct1047 = 'Y' then convert = 1
+    if omcf1047 = 'Y' then convert = 1
+    if convert = null
+    then jcl.7 = "//             PATHOPTS(USE)'"
+    else do
+      jcl.7 = 'CONVERT PATHOPTS(USE)'
+      if omct1047 = 'Y' then jcl.7 = jcl.7 'TO1047'
+      if omcf1047 = 'Y' then jcl.7 = jcl.7 'FROM1047'
+      jcl.7 = '//          ' jcl.7
+    end
+
+    jcl.8 = "//SYSTSPRT DD  SYSOUT=*"
+    jcl.9 = "//SYSTSIN  DD  DUMMY"
+    jc = 9
+
+/* --------------------------------- *
+| Fixup the JOB Card to add SYSTEM= |
+* --------------------------------- */
+    system = 'SYSTEM='mvsvar('sysname')
+    if sysaff = 1 then
+    do i = 1 to jc
+      jcw = strip(left(jcl.i,72))
+      if right(jcw,1) = ',' then
+      if length(jcw) < 57 then do
+        jcw = jcw''system','
+        jcl.i = jcw
+        leave i
+      end
+      if right(jcw,1) /= ',' then
+      if length(jcw) < 57 then do
+        jcw = jcw','system
+        jcl.i = jcw
+        leave i
+      end
+    end
+
+/* ----------------- *
+| Build the //IN DD |
+* ----------------- */
+    if left(omcfrom,1) = '/' then do
+      jc = jc + 1
+      jcl.jc = "//IN       DD  PATH='"omcfrom"',"
+      jc = jc + 1
+      jcl.jc = "//         PATHOPTS=(ORDONLY)"
+    end
+    else do
+      jc = jc + 1
+      if left(omcfrom,1) = "'"
+      then fromx = translate(substr(omcfrom,2,length(omcfrom)-2))
+      else do
+        fromx = translate(fixup_copydsn(omcfrom))
+      end
+      jcl.jc = "//IN       DD  DISP=SHR,DSN="fromx
+    end
+
+/* ---------------------- *
+| Now build the //OUT DD |
+* ---------------------- */
+    if left(omcto,1) /= '/' then do
+      if left(omcto,1) = "'"
+      then tox = translate(substr(omcto,2,length(omcto)-2))
+      else do
+        tox = translate(fixup_copydsn(omcto))
+      end
+      if omcdisp = 'C' then do
+        jc = jc + 1
+        jcl.jc = "//OUT      DD  DISP=(,CATLG),DSN="tox","
+        jc = jc + 1
+        jcl.jc = "//             DCB=(RECFM="omcrf",LRECL="omclrec",BLKSIZE=0),"
+        jc = jc + 1
+        jcl.jc = "//             SPACE=(TRK,("omctrks","omctrks"),RLSE),"
+        if strip(omcunit||omcvol) /= null then do
+          univol = null
+          if omcunit /= null then univol = 'UNIT='omcunit
+          if omcvol /= null then
+          if univol /= null then univol = univol',VOL=SER='omcvol
+          else univol = 'VOL=SER='omcvol
+          jc = jc + 1
+          jcl.jc = "//             "univol
+        end
+        else jcl.jc = left(jcl.jc,length(jcl.jc)-1)
+      end
+      if omcdisp /= 'C' then do
+        jc = jc + 1
+        jcl.jc = "//OUT      DD  DISP=SHR,DSN="tox
+      end
+    end
+    else do
+      if left(omcto,1) = '/' then do
+        jc = jc + 1
+        jcl.jc = "//OUT      DD  PATH='"omcto"',"
+        jc = jc + 1
+        jcl.jc = "//             PATHOPTS=(OCREAT,OWRONLY),"
+        jc = jc + 1
+        jcl.jc = "//             PATHMODE=("pathmode")"
+      end
+    end
+    jcl.0 = jc
+    tempdd = 'OC'random(9999)
+    'Alloc f('tempdd') new spa(1,1) tr recfm(f b) lrecl(80)'
+    'Execio * diskw' tempdd '(finis stem jcl.'
+    Address ISPExec
+    "LMINIT DATAID(omcid) DDName("tempdd")"
+    "EDIT DATAID("omcid") Macro(omcmacro)"
+    "LMFREE DATAID("omcid")"
+    Address TSO 'Free f('tempdd')'
+
+/* ------------------------- *
+| Return to the entry panel |
+* ------------------------- */
+    signal ispf
+  end
+
+/* --------------- *
+| Exit processing |
+* --------------- */
+Exit:
+  if olduid /= 0 then do
+     /* return to non uid(0) state */
+     address syscall 'seteuid' olduid
+     end
+  if load_info /= null then do
+    Address ISPEXEC
+    do until length(load_info) = 0
+      parse value load_info with dd libd load_info
+      if left(libd,6) = "ALTLIB" then do
+        if libd = "ALTLIBC" then lib = "CLIST"
+        else lib = "EXEC"
+        Address TSO,
+          "Altlib Deact Application("lib")"
+      end
+      else "libdef" libd
+      address tso "free f("dd")"
+    end
+  end
+  Exit 0
+
+/* ------------------------------ *
+| Change to a new OMVS Directory |
+* ------------------------------ */
+Change_ODIR: procedure expose zcmd home_dir cdir_flag save_omcfrom
+  parse arg fromdir
+  parse value '' with null load_info selections stack_dir
+  if fromdir = '~' then fromdir = home_dir
+
+/* --------------------------------------------------- *
+| Restart process if a L selection or CD command used |
+* --------------------------------------------------- */
+Restart:
+  do forever
+    cmd = 'ls -la' fromdir
+    rc = bpxwunix(cmd,,stdout.,stderr.)
+    if stdout.0 = 0 then do
+      omcsm = 'Invalid Dir'
+      omclm = fromdir stderr.1
+      Address ISPExec 'setmsg msg(omc000)'
+      zcmd = null
+      if cdir_flag = 0 then return fromdir
+      else do
+        fromdir = save_omcfrom
+        if pos('|',stack_dir) = 0 then leave
+        lp = lastpos('|',stack_dir)
+        fromdir = strip(substr(stack_dir,lp+1))
+        stack_dir = left(stack_dir,lp-1)
+      end
+    end
+    else leave
+  end
+  cdir_flag = 1
+
+/* ------------------------------------------ *
+| List the OMVS directory. Once a valid file |
+| is selected then process it.               |
+* ------------------------------------------ */
+  Address ISPExec
+  tbl = 'OC'random(999)
+
+  'TBCreate' tbl 'Names(ocsel ofile odate operm otype) Nowrite'
+
+  do i = 2 to stdout.0
+    parse value stdout.i with operm x1 oid ogrp ,
+      osize omon ody oyr ofile
+    otype = left(operm,1)
+    opermv = 0
+    offset = 100
+    do ip = 2 to 10
+      op = substr(operm,ip,1)
+      select
+        when op = 'r' then opermv = opermv + (4*offset)
+        when op = 'w' then opermv = opermv + (2*offset)
+        when op = 'x' then opermv = opermv + (1*offset)
+        otherwise nop
+      end
+      if ip = 4 then offset = offset / 10
+      if ip = 7 then offset = offset / 10
+    end
+    odate = omon left(ody+100,2) oyr
+    operm = opermv
+    'tbadd' tbl
+  end
+
+  'tbtop' tbl
+  tblrc = 0
+  do forever
+    ocsel = null
+    if ztdsels = 0 then tblrc = 0
+    if tblrc = 0
+    then 'tbdispl' tbl 'panel(ocopytbl)'
+    else if tblrc = 4 then 'tbdispl' tbl
+    tblrc = rc
+    if translate(zcmd) = 'CANCEL' then leave
+    if tblrc > 4 then do
+      if pos('|',stack_dir) = 0 then leave
+      lp = lastpos('|',stack_dir)
+      fromdir = strip(substr(stack_dir,lp+1))
+      stack_dir = left(stack_dir,lp-1)
+      call restart_odir
+    end
+    if ocsel /= null then ocsel = translate(ocsel)
+    omcsm = null
+    Select
+      When translate(word(zcmd,1)) = 'CD' then do
+      savedir = fromdir
+      fromdir = word(zcmd,2)
+      if left(fromdir,1) = '~' then
+         fromdir = strip(home_dir''substr(fromdir,3))
+      address syscall 'chdir (fromdir)'
+      if retval < 0 then do
+        omcsm = 'Invalid Dir'
+        omclm = fromdir 'is an invalid directory'
+        'setmsg msg(oms000)'
+        fromdir = savedir
+      end
+      else stack_dir = stack_dir '|' savedir
+     address syscall 'getcwd fromdir'
+     if right(fromdir,1) /= '/' then fromdir = fromdir'/'
+        if omcsm = null then
+        call restart_odir
+      end
+      When translate(left(zcmd,1)) = 'F' then do
+        fw = translate(word(zcmd,2))
+        'tbtop' tbl
+        do forever
+          'tbskip' tbl
+          if rc > 0 then leave
+          if pos(fw,translate(ofile)) > 0 then do
+            omcsm = 'Found'
+            omclm = fw 'found in the list'
+            'setmsg msg(omc000)'
+            leave
+          end
+        end
+      end
+      When translate(left(zcmd,1)) = 'L' then do
+        fw = translate(word(zcmd,2))
+        fl = length(fw)
+        'tbtop' tbl
+        do forever
+          'tbskip' tbl
+          if rc > 0 then leave
+          if translate(left(ofile,fl)) = fw then do
+            omcsm = 'Found'
+            omclm = fw 'found in the list'
+            'setmsg msg(omc000)'
+            leave
+          end
+        end
+      end
+      When ocsel = 'B' then do
+        if otype = '-' then do
+          'control display save'
+          call outtrap 'x.'
+          Address TSO 'OBrowse' fromdir''ofile
+          call outtrap 'off'
+          'control display restore'
+          if x.0 > 0 then do
+             omcsm = 'Error'
+             omclm = x.2
+             'Setmsg msg(omc000)'
+             end
+        end
+        else do
+          omcsm = 'Invalid'
+          omclm = 'This file may not be browsed.'
+          'Setmsg msg(omc000)'
+        end
+      end
+      when ocsel = 'I' then call list_info
+      when ocsel = 'L' then call do_dirlist
+      When ocsel = 'S' then do
+        if otype = 'd' then call do_dirlist
+        if otype = '-'
+        then selections = fromdir''ofile
+        else do
+          omcsm = 'Invalid'
+          omclm = 'Not a valid file type'
+          'Setmsg msg(omc000)'
+        end
+      end
+      Otherwise nop
+    end
+
+    if selections /= null then leave
+    ocsel = null
+  end
+
+  'control errors return'
+  'tbend' tbl
+
+  if selections = null then zcmd = 'CANCEL'
+  return selections
+
+/* ------------------------------ *
+| List the info on the OMVS File |
+* ------------------------------ */
+List_Info:
+  cmd = 'ls -la' fromdir''ofile
+  drop stdout. stderr.
+  rc = bpxwunix(cmd,,stdout.,stderr.)
+/* allocate a temp file to browse the results */
+  Address TSO
+  cmd_dd = "C"random()
+  "ALLOCATE FILE("cmd_dd") REUSE UNIT(vio) SPACE(1 1)" ,
+    "CYL DSORG(PS) RECFM(V B) LRECL(120)"
+  "EXECIO * DISKW" cmd_dd "(STEM stdout. FINIS)"
+  Address ISPExec
+  "LMINIT DATAID(DATAID) DDNAME("cmd_dd")"
+  'control display save'
+  "BROWSE DATAID("dataid")"
+  'control display restore'
+  "LMFREE DATAID("dataid")"
+  Address TSO ,
+    "FREE FILE("cmd_dd")"
+  Address ISPExec
+  return
+
+/* --------------------------------------------- *
+| Restart the OMVS Directory at a new directory |
+* --------------------------------------------- */
+Restart_Odir:
+  'tbend' tbl
+  call restart
+  return
+
+/* ------------------ *
+ | List sub_directory |
+ * ------------------ */
+do_dirlist:
+  ocsel = null
+  if ofile = '..' then do
+    stack_dir = stack_dir '|' fromdir
+    fromdir = left(fromdir,length(fromdir)-1)
+    lp = lastpos('/',fromdir)
+    fromdir = left(fromdir,lp)
+    call restart_odir
+    return
+  end
+  else do
+    stack_dir = stack_dir '|' fromdir
+    fromdir = fromdir''ofile'/'
+  end
+  call restart_odir
+  return
+
+/* --------------------------- *
+| Process a z/OS Data Set HLQ |
+* --------------------------- */
+Get_zOS: Procedure expose fixup null zcmd
+  parse value '' with null selections
+  parse arg fromdir
+
+  if left(fromdir,1)  /= "'"
+  then fromdir = fixup_copydsn(fromdir)
+  else fromdir = substr(fromdir,2,length(fromdir)-2)
+
+  count = 0
+  Address ISPEXEC
+  "Lmdinit Listid(LMD) Level("fromdir")"
+  do forever
+    "Lmdlist Listid("lmd") Stats(YES) Dataset(dsn) Option(LIST)"
+    if rc > 0 then do
+      "Lmdfree listid("lmd")"
+      zdir.0 = count
+      leave
+    end
+    count = count + 1
+/* take into account PO-E */
+    if left(zdldsorg,2) = 'PO' then zdldsorg = 'PO'
+    zdir.count =dsn zdldsorg zdlvol
+  end
+
+  if count = 0 then do
+    omcsm = 'Invalid'
+    omclm = fromdir 'is not a valid high level qualifier'
+    Address ISPExec ,
+      'setmsg msg(omc000)'
+    return selections
+  end
+
+  Address ISPExec
+  tbl = 'OZ'random(999)
+
+  'TBCreate' tbl 'Names(ocsel mfile dsorg volser) Nowrite'
+
+  do i = 1 to zdir.0
+    mfile = word(zdir.i,1)
+    dsorg  = word(zdir.i,2)
+    volser = word(zdir.i,3)
+    'tbadd' tbl
+  end
+
+  'tbtop' tbl
+  tblrc = 0
+  do forever
+    ocsel = null
+    if ztdsels = 0 then tblrc = 0
+    if tblrc = 0
+    then 'tbdispl' tbl 'panel(ZCOPYTBL)'
+    else if tblrc = 4 then 'tbdispl' tbl
+    tblrc = rc
+    if tblrc > 4 then leave
+    Select
+      When left(zcmd,1) = 'F' then do
+        fw = word(zcmd,2)
+        'tbtop' tbl
+        do forever
+          'tbskip' tbl
+          if rc > 0 then leave
+          if pos(fw,mfile) > 0 then do
+            omcsm = 'Found'
+            omclm = fw 'found in the list'
+            'setmsg msg(omc000)'
+            leave
+          end
+        end
+      end
+      When left(zcmd,1) = 'L' then do
+        fw = word(zcmd,2)
+        fl = length(fw)
+        'tbtop' tbl
+        do forever
+          'tbskip' tbl
+          if rc > 0 then leave
+          if left(mfile,fl) = fw then do
+            omcsm = 'Found'
+            omclm = fw 'found in the list'
+            'setmsg msg(omc000)'
+            leave
+          end
+        end
+      end
+      When ocsel = 'B' then do
+        'control display save'
+        "Browse Dataset('"mfile"')"
+        'control display restore'
+      end
+      when ocsel = 'I' then call List_zDS
+      When ocsel = 'S' then do
+        if dsorg = 'PO' then call get_member
+        else selections = "'"mfile"'"
+      end
+      Otherwise nop
+    end
+    if selections /= null then leave
+    if zcmd = 'CANCEL' then leave
+    ocsel = null
+  end
+
+  'tbend' tbl
+
+  if selections = null then zcmd = 'CANCEL'
+  return selections
+
+/* ----------------------------------------- *
+| Display and prompt for a member of a PDS. |
+| Once one is selected then process it.     |
+* ----------------------------------------- */
+Get_Member: procedure expose mfile selections fixup null zcmd
+  if left(mfile,1) /= "'" then do
+    mfile = fixup_copydsn(mfile)
+  end
+  else mfile = substr(mfile,2,length(mfile)-2)
+
+/* ------------------ *
+* Define ISPF Dataid *
+* ------------------ */
+  Address ISPEXEC
+  "LMINIT DATAID(STATUS) DATASET('"mfile"')"
+  "LMOPEN DATAID("STATUS") OPTION(INPUT)"
+/* ------------ *
+* Set defaults *
+* ------------ */
+  parse value "" with member ,
+    ZLCDATE ZLMDATE ZLVERS ZLMOD ZLMTIME ZLCNORC,
+    ZLINORC ZLMNORC ZLUSER
+  ocztbl = 'ocz'random(9999)
+  'TBCreate' ocztbl 'Names(member' ,
+    'ZLCDATE ZLMDATE ZLVERS ZLMOD ZLMTIME ZLCNORC' ,
+    'ZLINORC ZLMNORC ZLUSER) Nowrite'
+
+/* ----------------------- *
+* Now process all members *
+* ----------------------- */
+  do forever
+    "LMMLIST Dataid("status") OPTION(LIST) MEMBER(MEMBER)" ,
+      "STATS(YES)"
+/* --------------------------------- *
+* If RC 4 or more leave the do loop *
+* --------------------------------- */
+    if rc > 3 then leave
+/* ------------------------------ *
+* Add each member info to a stem *
+* ------------------------------ */
+    member = strip(member)
+    'tbadd' ocztbl
+  end
+  'tbtop' ocztbl
+
+/* ------------------------- *
+* Close and Free the Dataid *
+* ------------------------- */
+  "LMClose Dataid("status")"
+  "LMFree  Dataid("status")"
+
+/* --------------------- *
+| Now select the member |
+* --------------------- */
+  tblrc = 0
+  do forever
+    ocsel = null
+    selections = null
+    if ztdsels = 0 then tblrc = 0
+    if tblrc = 0
+    then 'tbdispl' ocztbl 'panel(zcopyptb)'
+    else if tblrc = 4 then 'tbdispl' ocztbl
+    tblrc = rc
+    if tblrc > 4 then leave
+
+    if left(zcmd,1) = 'L' then do
+      fw = word(zcmd,2)
+      fl = length(fw)
+      'tbtop' ocztbl
+      do forever
+        'tbskip' ocztbl
+        if rc > 0 then leave
+        if left(member,fl) = fw then do
+          omcsm = 'Found'
+          omclm = fw 'found in the list'
+          'setmsg msg(omc000)'
+          leave
+        end
+      end
+    end
+
+    if ocsel = 'B' then do
+      'control display save'
+      "Browse Dataset('"mfile"("member")'"
+      'control display restore'
+    end
+    if ocsel = 'S' then do
+      selections = "'"mfile"("member")'"
+      if sysdsn(selections) /= 'OK' then do
+        omcsm = 'Error'
+        omclm = sysdsn(selections)
+        'Setmsg msg(omc000)'
+        selections = null
+      end
+      leave
+    end
+  end
+
+  'tbend' ocztbl
+
+  if selections = null then zcmd = 'CANCEL'
+  return selections
+
+List_zDS:
+/* ------------------------------------------------- *
+* Now display a list of the received datasets using *
+* ISPF LMM services (ISPF 3.4)                      *
+* ------------------------------------------------- */
+  Address ISPExec
+  "LMDINIT LISTID(LISTID) LEVEL("mfile")"
+  "LMDDISP LISTID("ListId") Confirm(Yes)",
+    "View(Volume)"
+  "LMDFREE LISTID("ListId")"
+  return
+  return selections
+
+/* ----------------------- *
+| Fixup the passed dsname |
+* ----------------------- */
+Fixup_copydsn:
+  arg copydsn
+  if copydsn = null then return
+  if fixup = 1 then return copydsn
+  if left(copydsn,1) = "'" then do
+    wdsn = substr(copydsn,2,length(copydsn)-2)
+  end
+  else do
+    if sysvar('syspref') = null
+    then do
+      hlq = sysvar('sysuid')
+      wdsn = copydsn
+    end
+    else do
+      hlq = sysvar('syspref')
+      wdsn = hlq'.'copydsn
+    end
+  end
+  fixup = 1
+  return wdsn
+
+/* --------------------  rexx procedure  -------------------- *
+* Name:      LoadISPF                                        *
+*                                                            *
+* Function:  Load ISPF elements that are inline in the       *
+*            REXX source code.                               *
+*                                                            *
+* Syntax:    load_info = loadispf                            *
+*                                                            *
+*            The inline ISPF resources are limited to        *
+*            ISPF Messages, Panels, and Skeletons,           *
+*                 CLISTs and EXECs are also supported.       *
+*                                                            *
+*            The inline resources must start in column 1     *
+*            and use the following syntax:                   *
+*                                                            *
+*            >START    used to indicate the start of the     *
+*                      inline data                           *
+*                                                            *
+*            >END    - used to indicate the end of the       *
+*                      inline data                           *
+*                                                            *
+*            Each resource begins with a type record:        *
+*            >type name                                      *
+*               where type is CLIST, EXEC, MSG, PANEL, SKEL  *
+*                     name is the name of the element        *
+*                                                            *
+* Sample usage:                                              *
+*          -* rexx *-                                        *
+*          load_info = loadispf()                            *
+*          ... magic code happens here (your code) ...       *
+*          Address ISPEXEC                                   *
+*          do until length(load_info) = 0                    *
+*             parse value load_info with dd libd load_info   *
+*             if left(libd,6) = "ALTLIB" then do             *
+*                if libd = "ALTLIBC" then lib = "CLIST"      *
+*                                    else lib = "EXEC"       *
+*                Address TSO,                                *
+*                  "Altlib Deact Application("lib")"         *
+*                end                                         *
+*             else "libdef" libd                             *
+*             address tso "free f("dd")"                     *
+*             end                                            *
+*          exit                                              *
+*          >Start inline elements                            *
+*          >Panel panel1                                     *
+*          ...                                               *
+*          >Msg msg1                                         *
+*          ...                                               *
+*          >End of inline elements                           *
+*                                                            *
+* Returns:   the list of ddnames allocated for use along     *
+*            with the libdef's performed or altlib           *
+*                                                            *
+*            format is ddname libdef ddname libdef ...       *
+*                   libdef may be altlibc or altlibe         *
+*                   for altlib clist or altlib exec          *
+*                                                            *
+* Notes:     Entire routine must be included with REXX       *
+*            exec - inline with the code.                    *
+*                                                            *
+* Comments:  The entire rexx program is processed from the   *
+*            last record to the first to find the >START     *
+*            record at which point all records from that     *
+*            point on are processed until the >END           *
+*            statement or the end of the program is found.   *
+*                                                            *
+*            It is *strongly* suggested that the inline      *
+*            elements be at the very end of your code so     *
+*            that the search for them is faster.             *
+*                                                            *
+*            Inline ISPTLIB or ISPLLIB were not supported    *
+*            because the values for these would have to be   *
+*            in hex.                                         *
+*                                                            *
+* Author:    Lionel B. Dyck                                  *
+*                                                            *
+* History:                                                   *
+*            08/29/17 - Fixup static values that were vars   *
+*            05/31/17 - Change default directory count       *
+*            12/09/16 - update for add_it routine            *
+*            05/10/16 - correction for clist and exec        *
+*            04/19/16 - bug correction                       *
+*            06/04/04 - Enhancements for speed               *
+*            08/05/02 - Creation                             *
+*                                                            *
+* ---------------------------------------------------------- *
+* Disclaimer: There is no warranty, either explicit or       *
+* implied with this code. Use it at your own risk as there   *
+* is no recourse from either the author or his employeer.    *
+* ---------------------------------------------------------- */
+LoadISPF: Procedure
+
+  parse value "" with null kmsg kpanel kskel first returns ,
+    kclist kexec
+/* ------------------------------------------------------- *
+* Find the InLine ISPF Elements and load them into a stem *
+* variable.                                               *
+*                                                         *
+* Elements keyword syntax:                                *
+* >START - start of inline data                           *
+* >CLIST name                                             *
+* >EXEC name                                              *
+* >MSG name                                               *
+* >PANEL name                                             *
+* >SKEL name                                              *
+* >END   - end of all inline data (optional if last)      *
+* ------------------------------------------------------- */
+  last_line = sourceline()
+  do i = last_line to 1 by -1
+    line = sourceline(i)
+    if translate(left(line,6)) = ">START " then leave
+  end
+  rec = 0
+/* --------------------------------------------------- *
+* Flag types of ISPF resources by testing each record *
+* then add each record to the data. stem variable.    *
+* --------------------------------------------------- */
+  do j = i+1 to last_line
+    line = sourceline(j)
+    if translate(left(line,5)) = ">END "   then leave
+    if translate(left(line,7)) = ">CLIST " then kclist = 1
+    if translate(left(line,6)) = ">EXEC "  then kexec  = 1
+    if translate(left(line,5)) = ">MSG "   then kmsg   = 1
+    if translate(left(line,7)) = ">PANEL " then kpanel = 1
+    if translate(left(line,6)) = ">SKEL "  then kskel  = 1
+    rec  = rec + 1
+    data.rec = line
+  end
+
+/* ----------------------------------------------------- *
+* Now create the Library and Load the Member(s)         *
+* ----------------------------------------------------- */
+  Address ISPExec
+/* ----------------------------- *
+* Assign dynamic random ddnames *
+* ----------------------------- */
+  clistdd = "lc"random(999)
+  execdd  = "le"random(999)
+  msgdd   = "lm"random(999)
+  paneldd = "lp"random(999)
+  skeldd  = "ls"random(999)
+
+/* ---------------------------------------- *
+*  LmInit and LmOpen each resource library *
+* ---------------------------------------- */
+  if kclist <> null then do
+    call alloc_dd clistdd
+    "Lminit dataid(clist) ddname("clistdd")"
+    "LmOpen dataid("clist") Option(Output)"
+    returns = strip(returns clistdd 'ALTLIBC')
+  end
+  if kexec <> null then do
+    call alloc_dd execdd
+    "Lminit dataid(exec) ddname("execdd")"
+    "LmOpen dataid("exec") Option(Output)"
+    returns = strip(returns execdd 'ALTLIBE')
+  end
+  if kmsg <> null then do
+    call alloc_dd msgdd
+    "Lminit dataid(msg) ddname("msgdd")"
+    "LmOpen dataid("msg") Option(Output)"
+    returns = strip(returns msgdd 'ISPMLIB')
+  end
+  if kpanel <> null then do
+    call alloc_dd paneldd
+    "Lminit dataid(panel) ddname("paneldd")"
+    "LmOpen dataid("panel") Option(Output)"
+    returns = strip(returns paneldd 'ISPPLIB')
+  end
+  if kskel <> null then do
+    call alloc_dd skeldd
+    "Lminit dataid(skel) ddname("skeldd")"
+    "LmOpen dataid("skel") Option(Output)"
+    returns = strip(returns skeldd 'ISPSLIB')
+  end
+
+/* ----------------------------------------------- *
+* Process all records in the data. stem variable. *
+* ----------------------------------------------- */
+  do i = 1 to rec
+    record = data.i
+    recordu = translate(record)
+    if left(recordu,5) = ">END " then leave
+    if left(recordu,7) = ">CLIST " then do
+      if first = 1 then call add_it
+      type = "Clist"
+      first = 1
+      parse value record with x name
+      iterate
+    end
+    if left(recordu,6) = ">EXEC " then do
+      if first = 1 then call add_it
+      type = "Exec"
+      first = 1
+      parse value record with x name
+      iterate
+    end
+    if left(recordu,5) = ">MSG " then do
+      if first = 1 then call add_it
+      type = "Msg"
+      first = 1
+      parse value record with x name
+      iterate
+    end
+    if left(recordu,7) = ">PANEL " then do
+      if first = 1 then call add_it
+      type = "Panel"
+      first = 1
+      parse value record with x name
+      iterate
+    end
+    if left(recordu,6) = ">SKEL " then do
+      if first = 1 then call add_it
+      type = "Skel"
+      first = 1
+      parse value record with x name
+      iterate
+    end
+/* --------------------------------------------*
+* Put the record into the appropriate library *
+* based on the record type.                   *
+* ------------------------------------------- */
+    Select
+      When type = "Clist" then
+      "LmPut dataid("clist") MODE(INVAR)" ,
+        "DataLoc(record) DataLen(255)"
+      When type = "Exec" then
+      "LmPut dataid("exec") MODE(INVAR)" ,
+        "DataLoc(record) DataLen(255)"
+      When type = "Msg" then
+      "LmPut dataid("msg") MODE(INVAR)" ,
+        "DataLoc(record) DataLen(80)"
+      When type = "Panel" then
+      "LmPut dataid("panel") MODE(INVAR)" ,
+        "DataLoc(record) DataLen(80)"
+      When type = "Skel" then
+      "LmPut dataid("skel") MODE(INVAR)" ,
+        "DataLoc(record) DataLen(80)"
+      Otherwise nop
+    end
+  end
+  if type <> null then call add_it
+/* ---------------------------------------------------- *
+* Processing completed - now lmfree the allocation and *
+* Libdef the library.                                  *
+* ---------------------------------------------------- */
+  if kclist <> null then do
+    Address TSO,
+      "Altlib Act Application(Clist) File("clistdd")"
+    "LmFree dataid("clist")"
+  end
+  if kexec <> null then do
+    Address TSO,
+      "Altlib Act Application(Exec) File("execdd")"
+    "LmFree dataid("exec")"
+  end
+  if kmsg <> null then do
+    "LmFree dataid("msg")"
+    "Libdef ISPMlib Library ID("msgdd") Stack"
+  end
+  if kpanel <> null then do
+    "Libdef ISPPlib Library ID("paneldd") Stack"
+    "LmFree dataid("panel")"
+  end
+  if kskel <> null then do
+    "Libdef ISPSlib Library ID("skeldd") Stack"
+    "LmFree dataid("skel")"
+  end
+  return returns
+
+/* --------------------------- *
+* Add the Member using LmmAdd *
+* based upon type of resource *
+* --------------------------- */
+Add_It:
+  Select
+    When type = "Clist" then
+    "LmmAdd dataid("clist") Member("name")"
+    When type = "Exec" then
+    "LmmAdd dataid("exec") Member("name")"
+    When type = "Msg" then
+    "LmmAdd dataid("msg") Member("name")"
+    When type = "Panel" then
+    "LmmAdd dataid("panel") Member("name")"
+    When type = "Skel" then
+    "LmmAdd dataid("skel") Member("name")"
+    Otherwise nop
+  end
+  type = null
+  return
+
+/* ------------------------------ *
+* ALlocate the temp ispf library *
+* ------------------------------ */
+Alloc_DD:
+  arg dd
+  Address TSO
+  if pos(left(dd,2),"lc le") > 0 then
+  "Alloc f("dd") unit(sysda) spa(5,5) dir(9)",
+    "recfm(v b) lrecl(255) blksize(32760)"
+  else
+  "Alloc f("dd") unit(sysda) spa(5,5) dir(9)",
+    "recfm(f b) lrecl(80) blksize(27920)"
+  return
+
+>Start
+>Exec OMCMACro
+/* ------------------- rexx ------------------ *
+ | OMVSCOPY Edit Macro                         |
+ |   - sets in number mode                     |
+ |   - if in create mode for an OMVS file then |
+ |     insert comments about PATHMODE options  |
+ |   - position the edit session to the top    |
+ * ------------------------------------------- */
+  Address ISREdit
+  'Macro'
+  "find 'pathmode' first"
+  frc = rc
+  if frc = 0 then do
+    '(last) = linenum .zlast'
+    call putline ,
+      '//*  PATHMODE is the JCL specifications for OMVS file' ,
+      'permissions.'
+    call putline ,
+      '//*  If changing PATHMODE use any combination of these:'
+    call putline ,
+      '//*  SIRWXU - owner read/write/execute        700 rwx-...-...'
+    call putline ,
+      '//*  SIRUSR - owner read                      400 r..-...-...'
+    call putline ,
+      '//*  SIWUSR - owner write                     200 .w.-...-...'
+    call putline ,
+      '//*  SIXUSR - owner execute                   100 ..x-...-...'
+    call putline ,
+      '//*  SIRWXG - group read/write/execute        070 ...-rwx-...'
+    call putline ,
+      '//*  SIRGRP - group read                      040 ...-r..-...'
+    call putline ,
+      '//*  SIWGRP - group write                     020 ...-.w.-...'
+    call putline ,
+      '//*  SIXGRP - group execute                   010 ...-..x-...'
+    call putline ,
+      '//*  SIRWXO - others read/write/execute       007 ...-...-rwx'
+    call putline ,
+      '//*  SIROTH - others read                     004 ...-...-r..'
+    call putline ,
+      '//*  SIWOTH - others write                    002 ...-...-.w.'
+    call putline ,
+      '//*  SIXOTH - others execute                  001 ...-...-..x'
+  end
+  'hilite jcl'
+  'reset'
+  "find 'JOB' first"
+  'reset find'
+  'ren'
+  'locate 0'
+  exit 1
+putline:
+  parse arg line
+  "line_after" last " = (line)"
+  last = last + 1
+  return
+/*
+>Panel OMVSCOPY
+)Attr Default(%+_)
+  _ type( input) intens(low) caps(off) just(left ) hilite(uscore)
+    color(&omccinp)
+  $ type( input) intens(low) caps(on ) just(left ) hilite(uscore)
+    color(&omccinp)
+  @ type(output) intens(high) color(&omcchigh) hilite(&omccrev)
+  ¨ type(output) intens(low) color(&omcclow) just(asis) caps(off)
+    hilite(&omcsurev)
+  + type(text) intens(low) skip(on) color(&omcclow)
+  % type(text) intens(high) skip(on) color(&omcchigh)
+  # type(output) pas(on) hilite(uscore) color(&omcclow) caps(off)
+)Body  Expand(\\)
+%-\-\-@title                %-\-\-
+%Command ===>_zcmd
+%
++Use the TSO%OCOPY+command to copy z/OS Data Set <--> OMVS File
+%
+%Input:   _omcfrom                                                           #z
+%Output:  _omcto                                                             #z
+#flip+    %Disp:$z+%(Create/Replace)                    +
++
+%Binary:  $z+%(Y/N)       %SuperUser:$z+%(Y/N - Foreground Only)
+%TO1047:  $z+%(Y/N)       %FROM1047: $z+%(Y/N)
++
+%Output Data Set Info%(if Disp is C):
+  %RECFM:$z  +%LRECL:$z    +%SPACE:$z   +%UNIT:$omcunit +%VOLSER:$omcvol+
++
+%Output File Info  %(if Disp is C):
+  %Permissions:_z  +%(777=rwxrwxrwx, default is 640=rw.r.....)
++
+%Execution Mode:$z+%(Foreground/Batch) %JOB Class:$omcjclas+
++
+¨omcsumsg
++
+ \ \Press%Enter+to continue or%F3+to Cancel the dialog\ \
+)Init
+  &title = 'OMVSCOPY (OCOPY) &ver'
+  .zvars = '(indi indo omcdisp omcbintx omcsu omct1047 omcf1047 +
+             omcrf omclrec omctrks omcperm omcexec)'
+  .cursor = &cursor
+  .help = och0
+  &flip = 'Flip'
+  vget (omcfrom omcto omcexec omcdisp omcbintx omct1047 omcf1047) profile
+  vget (omcrf omclrec omctrks omcperm omcunit omcvol omcjclas) profile
+  if (&omcsu = &z)
+      &omcsu = 'N'
+  if (&omcbintx = &z)
+      &omcbintx = 'N'
+  if (&omct1047 = &z)
+      &omct1047 = 'N'
+  if (&omcf1047 = &z)
+      &omcf1047 = 'N'
+  if (&omcrem = 'Y')
+     &omcexec = &z
+  if (&omcucr = 'Y')
+     &omcdisp = &z
+  if (&omcperm = &z)
+      &omcperm = '640'
+  if (&omcunit = &z)
+      &omcunit = '3390'
+)Proc
+  &ZCMD = UPPER(ZCMD)
+  IF (&ZCMD NE 'SET')
+     ver (&omcfrom,nb)
+     ver (&omcto,nb)
+     &omct = 0
+
+     IF (&omcfrom ¬= ' ')
+       /* Left justify the scrollable field */
+       /* check omcfrom type for dsnamefm test */
+       *REXX(omcfrom,omct)
+        omcfrom = strip(omcfrom,'L')
+        tl = left(omcfrom,1)
+        if pos(tl,'~/.') = 0 then omct = 1
+        if omct = 1
+           then if pos('*',omcfrom) > 0
+                then omct = 0
+       *ENDREXX
+       &ZTEMP1 = TRUNC(&omcfrom,1)
+       IF (&OMCT = 1)
+         &omcfrom = UPPER(omcfrom)
+         VER(&omcfrom DSNAMEFM)
+     IF (.MSG ¬= &Z )
+        EXIT
+     IF (&omcto   ¬= ' ')
+       /* Left justify the scrollable field */
+       *REXX(omcto)
+        omcto   = strip(omcto,'L')
+       *ENDREXX
+       &ZTEMP1 = TRUNC(&omcto,1)
+       IF (&ZTEMP1 ¬= '/' AND &ZTEMP1 ¬= '~' AND &ZTEMP1 ¬= '.')
+         &omcto   = UPPER(omcto)
+         VER(&omcto DSNAMEFM)
+     IF (.MSG ¬= &Z )
+        EXIT
+
+     if (&omcperm NE &z)
+     ver (&omcperm,num)
+     ver (&omcdisp,nb,list,R,C)
+     if (&omcsu = 'Y')
+         ver (&omcexec,nb,list,F)
+     if (&omcsu = 'N')
+         ver (&omcexec,nb,list,B,F)
+     vput (omcfrom omcto omcexec omcdisp omcbintx omct1047 +
+           omcf1047) profile
+     vput (omcrf omclrec omctrks omcperm omcunit omcvol +
+           omcjclas) profile
+)PNTS
+FIELD(FLIP   )  VAR(ZCMD) VAL('FLIP')
+)Field
+ Field(omcfrom) ind(indi,'<>') len(255)
+ Field(omcto  ) ind(indo,'<>') len(255)
+)End
+>Panel omcset
+)Attr Default(%+_)
+ _ type( input) intens(low ) caps(on ) just(left ) hilite(uscore)
+   color(&omccinp)
+ + type(text) intens(low) skip(on) color(&omcclow)
+ @ type(text) intens(high) color(&omcchigh) hilite(&omccrev)
+ % type(text) intens(high) skip(on) color(&omcchigh)
+ $ type(output)
+ 01 type(text) intens(low) color(blue)
+ 02 type(text) intens(low) color(green)
+ 03 type(text) intens(low) color(pink)
+ 04 type(text) intens(low) color(red)
+ 05 type(text) intens(low) color(turq)
+ 06 type(text) intens(low) color(white)
+ 07 type(text) intens(low) color(yellow)
+)Body  Expand(\\)
+%Settings-\-\-@OMVSCOPY SETTING%-\-\Settings
+%Command ===>_zcmd
+%
+%Color Settings
++
++   Input:+      _z+%(default Red)
++   Low Intense:+_z+%(default Blue)
+%   High Intense:_z+%(default Turq)
+   @Reverse:+    _z+%(Y/N, default Y)
++
+   %Allowed Colors:Blue Green Pink Red 	Turq White Yellow+
++
+%Misc Settings
++
++   Set Create/Replace to Blank:_z+%(Y/N, default N)
++
++   Set Execution Mode to Blank:_z+%(Y/N, default N)
++
++
++
++
++
+\ \Press%F3+to return to the dialog\ \
+)Init
+ .zvars = '(cinp clow chigh crev omcucr omcrem)'
+ .cursor = zcmd
+ .help = ochset
+ &cinp = trunc(&omccinp,1)
+ &clow = trunc(&omcclow,1)
+ &chigh = trunc(&omcchigh,1)
+ &crev = trunc(&omccrev,1)
+ &omcucr = trans(&omcucr,&z,N,Y,Y,N,N)
+ &omcrem = trans(&omcrem,&z,N,Y,Y,N,N)
+ if (&crev = 'R')
+     &crev = 'Y'
+ if (&crev NE 'Y')
+     &crev = 'N'
+)Proc
+ if (&cinp = &z)
+     &cinp = 'R'
+ if (&clow = &z)
+     &clow = 'B'
+ if (&chigh = &z)
+     &chigh = 'T'
+ ver (&cinp,nb,list,B,G,P,R,T,W,Y)
+ if (&cinp = 'B')
+     &omccinp = 'Blue'
+ if (&cinp = 'G')
+     &omccinp = 'Green'
+ if (&cinp = 'P')
+     &omccinp = 'Pink'
+ if (&cinp = 'R')
+     &omccinp = 'Red'
+ if (&cinp = 'T')
+     &omccinp = 'Turq'
+ if (&cinp = 'W')
+     &omccinp = 'White'
+ if (&cinp = 'Y')
+     &omccinp = 'Yellow'
+ ver (&clow,nb,list,B,G,P,R,T,W,Y)
+ if (&clow = 'B')
+     &omcclow = 'Blue'
+ if (&clow = 'G')
+     &omcclow = 'Green'
+ if (&clow = 'P')
+     &omcclow = 'Pink'
+ if (&clow = 'R')
+     &omcclow = 'Red'
+ if (&clow = 'T')
+     &omcclow = 'Turq'
+ if (&clow = 'W')
+     &omcclow = 'White'
+ if (&clow = 'Y')
+     &omcclow = 'Yellow'
+ ver (&chigh,nb,list,B,G,P,R,T,W,Y)
+ if (&chigh = 'B')
+     &omcchigh = 'Blue'
+ if (&chigh = 'G')
+     &omcchigh = 'Green'
+ if (&chigh = 'P')
+     &omcchigh = 'Pink'
+ if (&chigh = 'R')
+     &omcchigh = 'Red'
+ if (&chigh = 'T')
+     &omcchigh = 'Turq'
+ if (&chigh = 'W')
+     &omcchigh = 'White'
+ if (&chigh = 'Y')
+     &omcchigh = 'Yellow'
+ ver (&crev,nb,list,Y,N)
+ if (&crev = 'Y')
+     &omccrev = 'Reverse'
+ if (&crev = 'N')
+     &omccrev = &z
+ &omcset = 'Y'
+ ver (&omcucr,nb,list,Y,N)
+ ver (&omcrem,nb,list,Y,N)
+ vput (omccinp omcclow omcchigh omccrev omcset omcucr omcrem) profile
+)End
+*/
+>Panel och0
+)Attr Default(%+_)
+ _ type( input) intens(low ) caps(off) just(left ) hilite(uscore)
+ color(&omccinp)
+ @ type(text) intens(high) color(&omcchigh) hilite(&omccrev)
+ % type(text) intens(high) skip(on) color(&omcchigh)
+ + type(text) intens(low) skip(on) color(&omcclow)
+ $ type(output)
+)Body  Expand(\\)
+%Tutorial-\-\-@OMVSCOPY (OCOPY)%-\-\Tutorial
+%Command ===>_zcmd
+%
++Use the TSO%OCOPY+command to copy z/OS Data Set <--> OMVS File
+%
++Copy Execution Modes:
+%  Foreground  +Will run under ISPF
+%  Batch       +Will generate Batch JCL and open ISPF Edit
++
++Command and Point-n-Shoot:
+%  FLip        +Will swap the Input and Output fields
+%  Set         +Will change defaults (colors and actions)
++
+%Notes:+ 1. Only sequential or PDS members are allowed for z/OS Data Sets.
++        2. The default RECFM, LRECL, SPACE, or PERM may not be adequate or
++           correct for every OMVS file copied to a z/OS Data Set.
++        3. The space allocation is in Tracks.
++        4. Disp%R+will Replace or overlay an existing z/OS data set or
++           OMVS file (the data set or file must currently exist).
++        5. SuperUser is only available to those users who have it enabled.
++        6.%Batch+needs to run on this LPAR unless the OMVS files are shared.
++
+\ \Press%Enter+to continue or%F3+to return to the dialog\ \
+)Init
+ .cursor = zcmd
+ &zup = och0
+ &zcont = och1
+)Proc
+)End
+>Panel ochset
+)Attr Default(%+_)
+ _ type( input) intens(low ) caps(off) just(left ) hilite(uscore)
+ color(&omccinp)
+ @ type(text) intens(high) color(&omcchigh) hilite(&omccrev)
+ % type(text) intens(high) skip(on) color(&omcchigh)
+ + type(text) intens(low) skip(on) color(&omcclow)
+ $ type(output)
+)Body  Expand(\\)
+%Tutorial-\-\-@OMVSCOPY (OCOPY)%-\-\Tutorial
+%Command ===>_zcmd
+%
++OMVSCOPY Settings
+%
++Change the default colors:
+%  Input          +Default is Red
+%  Low+intensity   Default is Blue
+%  High+intensity  Default if Turq
+%  Reverse        +Default is Yes
++
++Reset the Disposition to blank for each use.
++
++Reset the Execution mode to blank for each use.
++
++
++
++
++
++
++
++
+\ \Press%F3+to return to the dialog\ \
+)Init
+ .cursor = zcmd
+ &zup = ochset
+ &zcont = ochset
+)Proc
+)End
+>Panel och1
+)Attr Default(%+_)
+ _ type( input) intens(low ) caps(off) just(left ) hilite(uscore)
+ color(&omccinp)
+ @ type(text) intens(high) color(&omcchigh) hilite(&omccrev)
+ % type(text) intens(high) skip(on) color(&omcchigh)
+ + type(text) intens(low) skip(on) color(&omcclow)
+ $ type(output) color(&omcclow)
+)Body  Expand(\\)
+%Tutorial-\-\-@OMVSCOPY (OCOPY)%-\-\Tutorial
+%Command ===>_zcmd
+%
++Input and Output Examples:
+%
++z/OS Examples:
++
+%  Input:+'hlq.TEST.FILE'       +Sequential data set
+%  Input:+TEST.FILE             +Sequential data set
+%  Input:+'hlq.TEST*'           +Selection list of data sets
+%  Input:+TEST.PDS              +Selection list of members
++
++OMVS Examples:
++
+%  Input:$z                     +Selection list of users Home directory
+%  Input:$z                     +File in users Home directory
+%  Input:+/u/test.file          +Individual file
+%  Input:+/u/xyz/               +Selection list of /u/xyz/ files
++
+%Note:+Both the%Input+and%Output+fields are scrollable (left and right) and
++      can be expanded using the%ISPF EXPAND+command (put the cursor in field)
++
+\ \Press%Enter+to continue or%F3+to return to the dialog\ \
+)Init
+ .zvars = '(t1 t2)'
+ &t1    = '~/'
+ &t2    = '~/file'
+ .cursor = zcmd
+ &zup = och0
+ &zcont = ocht0
+)Proc
+)End
+/*
+>Panel OCOPYTBL
+)Attr Default(%+_)
+  _ type( input) intens(low ) caps(off) just(left ) hilite(uscore)
+    color(&omccinp)
+  $ type(output) intens(low ) caps(off) just(left ) color(&omcclow)
+  @ type(text) intens(high) color(&omcchigh) hilite(&omccrev)
+  + type(text) intens(low) skip(on) color(&omcclow)
+  % type(text) intens(high) skip(on) color(&omcchigh)
+  ¨ type(output) intens(low) color(&omcclow) just(asis) caps(off)
+    hilite(&omcsurev)
+)Body  Expand(\\)
+%-\-\-@OMVSCOPY (OCOPY)%-\-\-
+%Command ===>_zcmd
+¨omcsumsg
++Directory: $fromdir
+%
+%S  T OMVS File                                               Date         Perm
+)Model
+_z+$z$z                                                      $z           $z  +
+)Init
+  .zvars = '(ocsel otype ofile odate operm)'
+  .cursor = &zcmd
+  .help = ocht0
+)Proc
+ if (&zcmd EQ &z)
+    ver (&ocsel,list,B,I,S,L,b,i,s,l,&z)
+)End
+*/
+>Panel ocht0
+)Attr Default(%+_)
+  _ type( input) intens(low ) caps(off) just(left ) hilite(uscore)
+  color(&omccinp)
+  @ type(text) intens(high) color(&omcchigh) hilite(&omccrev)
+  % type(text) intens(high) skip(on) color(&omcchigh)
+  + type(text) intens(low) skip(on) color(&omcclow)
+  $ type(output) intens(low ) caps(off) just(left ) color(&omcclow)
+)Body  Expand(\\)
+%Tutorial-\-\-@OMVSCOPY (OCOPY)%-\-\Tutorial
+%Command ===>_zcmd
+%
++Select the OMVS File to copy to a z/OS Data Set
+%
++Command options:
+%
+%  CANCEL  +Cancel and return to main panel
+%  CD      +Change to directory      (e.g. ..$z+/etc/)
+%  F       +Find word in file name   (e.g. F xxx)
+%  L       +Locate a file            (e.g. L .profile)
+%
++Selection options:
++
+%  B       +Browse the file
+%  I       +Display the file info
+%  L       +List the selected directories files (use%F3+to move up)
+%  S       +Select the file and begin the OCOPY
++
++Only files with a%T+(type) of%blank+are allowed with%B+or%S+
++Only files with a%T+(type) of%d+will work with%L+
++
+\ \Press%Enter+to continue or%F3+to return to the dialog\ \
+)Init
+   .cursor = zcmd
+   .zvars = '(til)'
+   &til = '~'
+   &zup = ocht0
+   &zcont = ochtcd
+)Proc
+)End
+>Panel ochtcd
+)Attr Default(%+_)
+  _ type( input) intens(low ) caps(off) just(left ) hilite(uscore)
+  color(&omccinp)
+  @ type(text) intens(high) color(&omcchigh) hilite(&omccrev)
+  % type(text) intens(high) skip(on) color(&omcchigh)
+  + type(text) intens(low) skip(on) color(&omcclow)
+  $ type(output) intens(high) caps(off) just(left )
+)Body  Expand(\\)
+%Tutorial-\-\-@OMVSCOPY (OCOPY)%-\-\Tutorial
+%Command ===>_zcmd
+%
+%CD+Examples within OMVSCOPY
+%
+%  cd$z                  +Change to users home directory
+%  cd ..                 +Change to the next higher directory
+%  cd ./xyz              +Change to users subdirectory xyz
+%  cd$z                  +Change to users home directory
+%  cd /                  +Change to the root directory
+%  cd /usr/lpp/          +Change to /usr/lpp/ directory
+%
++The%CD+command will remember the prior directories during the session
++so that using%F3+will move back up the directory 'chain'. Enter%CANCEL+
++to immediately return to the OMVSCOPY entry panel.
+%
+%
+%
++
++
++
++
+\ \Press%Enter+to continue or%F3+to return to the dialog\ \
+)Init
+   .cursor = zcmd
+   .zvars = '(til tilx)'
+   &til  = '~'
+   &tilx = '~/'
+   &zup  = ochtcd
+   &zcont = ocht1
+)Proc
+)End
+>Panel ZCOPYTBL
+)Attr Default(%+_)
+  _ type( input) intens(low ) caps(on ) just(left ) hilite(uscore)
+    color(&omccinp)
+  $ type(output) intens(low ) caps(on ) just(left ) color(&omcclow)
+  @ type(text) intens(high) color(&omcchigh) hilite(&omccrev)
+  + type(text) intens(low) skip(on) color(&omcclow)
+  % type(text) intens(high) skip(on) color(&omcchigh)
+)Body  Expand(\\)
+%-\-\-@OMVSCOPY (OCOPY)%-\-\-
+%Command ===>_zcmd
+%
++HLQ: $fromdir
+%
+%S    z/OS Data Set                                    DSORG   Volser
+)Model
+_z+  $z                                               $z      $z
+)Init
+  .zvars = '(ocsel mfile dsorg volser)'
+  .cursor = &zcmd
+  .help = ocht2
+)Proc
+ if (&zcmd EQ &z)
+   ver (&ocsel,list,B,I,S,b,i,s,&z)
+)End
+>Panel ZCOPYPTb
+)Attr Default(%+_)
+  _ type( input) intens(low ) caps(on ) just(left ) hilite(uscore)
+    color(&omccinp)
+  $ type(output) intens(low ) caps(on ) just(left ) color(&omcclow)
+  # type(output) intens(low ) caps(on ) just(right) color(&omcclow)
+  @ type(text) intens(high) color(&omcchigh) hilite(&omccrev)
+  + type(text) intens(low) skip(on) color(&omcclow)
+  % type(text) intens(high) skip(on) color(&omcchigh)
+)Body  Expand(\\)
+%-\-\-@OMVSCOPY (OCOPY)%-\-\-
+%Command ===>_zcmd
+%
++PDS:$mfile
+%
+%S    Member   Cdate    MDate   Ver Mod Time   Cur  Init   Mod User
+)Model
+_z+  $z       $z       $z      #z  #z #z     #z    #z    #z   $z
+)Init
+ .zvars = '(ocsel member +
+         ZLCDATE ZLMDATE ZLVERS ZLMOD ZLMTIME ZLCNORC +
+         ZLINORC ZLMNORC ZLUSER)'
+.cursor = &zcmd
+.help = ocht1
+)Proc
+ ver (&ocsel,list,B,S)
+)End
+>Panel ocht2
+)Attr Default(%+_)
+  _ type( input) intens(low ) caps(off) just(left ) hilite(uscore)
+    color(&omccinp)
+  @ type(text) intens(high) color(&omcchigh) hilite(&omccrev)
+  % type(text) intens(high) skip(on) color(&omcchigh)
+  + type(text) intens(low) skip(on) color(&omcclow)
+)Body  Expand(\\)
+%Tutorial-\-\-@OMVSCOPY (OCOPY)%-\-\Tutorial
+%Command ===>_zcmd
+%
++Select the z/OS Data Set to copy to a OMVS File
+%
++Command options:
+%
+%  F  +Find word in the data set name (e.g. F PDS)
+%  L  +Locate a data set name (e.g. L SYS1.PARM)
+%
++Selection options:
++
+%  B  +Browse the file
+%  I  +Display the file using DSList
+%  S  +Select the file and begin the OCOPY
++
+%Notes:+1. If a PDS is selected, then a member selection list will
++          be presented.
++
++
++
++
+\ \Press%Enter+to continue or%F3+to return to the dialog\ \
+)Init
+  .cursor = zcmd
+  &zup = ocht2
+  &zcont = och0
+)Proc
+)End
+>Panel ocht1
+)Attr Default(%+_)
+  _ type( input) intens(low ) caps(off) just(left ) hilite(uscore)
+  color(&omccinp)
+  @ type(text) intens(high) color(&omcchigh) hilite(&omccrev)
+  % type(text) intens(high) skip(on) color(&omcchigh)
+  + type(text) intens(low) skip(on) color(&omcclow)
+)Body  Expand(\\)
+%Tutorial-\-\-@OMVSCOPY (OCOPY)%-\-\Tutorial
+%Command ===>_zcmd
+%
++Select the PDS Member to be copied to a OMVS File
+%
++Command options:
++
+%  L+  Locate a member (e.g. L AB)
++
++Selection options:
++
+%  B+  Browse the file
+%  S+  Select the file and begin the OCOPY
++
++
++
++
++
++
++
++
++
+\ \Press%Enter+to continue or%F3+to return to the dialog\ \
+)Init
+  .cursor = zcmd
+  &zup = ocht1
+  &zcont = ocht2
+)Proc
+)End
+>msg OMC00
+OMC000  '&omcsm' .ALARM = NO .HELP = OCH0
+'&omclm'
+>End

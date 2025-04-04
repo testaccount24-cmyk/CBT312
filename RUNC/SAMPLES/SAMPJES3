@@ -1,0 +1,36 @@
+*
+** JES3 Commands
+*
+** Prefix with either EJES or SDSF depending on which you use
+*
+** If your shop uses ejes invoke RUNC -2 on the following command
+*  edit c sdsf ejes all
+
+* Display Main Processor info
+sdsf *i,main=all
+sdsf *i,main=&main
+
+* Display Active Jobs
+sdsf *i,a
+sdsf *i,a,&main
+sdsf *i,j=&jobname
+sdsf *i,j=&jobnumber
+
+* Display Status of Jobs by Priority
+sdsf *i,p=&priority
+
+* Display Setup Info
+sdsf *i,s
+sdsf *i,s,a
+sdsf *i,s,a,summ
+sdsf *i,s,e
+sdsf *i,s,u
+sdsf *i,s,w
+
+* Display C/I Backlog
+sdsf *i,b
+
+* Display Q
+sdsf *i,q
+sdsf *i,q,h
+sdsf *i,q,h,summ

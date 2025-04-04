@@ -1,0 +1,20 @@
+)Attr Default(%+_)
+/* + type(text  ) intens(low )                   information only  */
+   _ type( input) intens(high) caps(on) just(left ) color(red)
+   @ type(output) intens(high) caps(on) just(left ) color(yellow)
+   $ type(output) intens(high) caps(on) just(left ) color(red)
+   % type(text) intens(high)
+   ~ type(text) intens(high) color(blue) hilite(reverse)
+)Body Window(57,9) Expand(\\)
+%-\-\- ~Extract CA-View Reports@ver %-\-\-
++
++Patience - The selected reports is now being extracted
++
++   Report-ID: $rpt
++         Gen: $gen
++         Seq: $seq
++       Lines: $prtlines
++
+)Init
+)Proc
+)end

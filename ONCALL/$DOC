@@ -1,0 +1,10 @@
+This package is an ONCALL scheduling tool to assist in building
+an oncall rotation.
+
+The package must be installed via the RECEIVE member of this library to
+recreate the exec and panel libraries.
+
+You can use the ONCALL member to dynamically access the application.
+
+Note: It requires the XMITIP 4.88 or newer package if you wish to use
+the option to e-mail the generated report.

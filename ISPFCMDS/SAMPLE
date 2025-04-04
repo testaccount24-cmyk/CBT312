@@ -1,0 +1,18 @@
+/* rexx */
+
+/* set a short alias of DD for DDLIST/ISRDDN */
+"%ispfcmds user dd 0 alias ddlist"
+
+/* assumes that Lionel Dyck's Fastpath command has been
+   installed in your SYSEXEC or SYSPROC library concatenation */
+"%ispfcmds user fastpath 0 select cmd(%fastpath)"
+
+/* assumes that Doug Nadel's TASID has been installed into
+   a STEPLIB or your Linklist */
+"%ispfcmds user tasid 2 select cmd(tasid)"
+
+/* assumes that the IBM supplied ISRBPDF and ISREPDF
+   have been copied as BPDF and EPDF into your SYSEXEC or
+   SYSPROC library concatenation */
+"%ispfcmds user br 0 select cmd(%bpdf &zparm)"
+"%ispfcmds user ed 0 select cmd(%epdf &zparm)"

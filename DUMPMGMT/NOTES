@@ -1,0 +1,43 @@
+Miscelleanous notes:
+
+1. Setup in SYS1.PARMLIB member COMMNDxx
+   COM='DD NAME=SVCDUMP.&SYSNAME..&JOBNAME..D&LYYMMDD..T&LHHMMSS..S&SEQ.'
+
+2. Setup Automation to trap on message:
+   IEA611I COMPLETE DUMP ON dump.data.set.name
+
+3. Have automation issue command:
+   S SVCDMPLG,DUMP=dump.data.set.name
+
+4. Have automation run command %DMPIPLCK after each IPL
+
+5. Have automation run command %DUMPLOGX every day at 23:55 to purge
+   obsolete dumps
+
+6. Tailor DUMPLOGX exec for your own dump retention/purge rules
+
+7. Tailor DUMPLOGP exec to do the notifications per your installation.
+
+8. Alloc a sequential data set for your dumplog and tailor the exec's
+   with this data set name.
+   - Allocate the dumplog data set RECFM=FB LRECL=155 DSORG=PS
+   - copy member dumplog into this dataset to 'prime' it
+     (be sure to delete the sample data set)
+
+9. View the dumplog under ISPF using the command DUMPINDX
+
+10. Get and install the XMITIP package if you wish to do notifications
+    via e-mail (http://www.geocities.com/lbdyck)
+
+11. Get and install the FTPBatch package if you wish to be able to
+    send dumps via FTP to a vendor or other support group
+    (http://www.geocities.com/lbdyck)
+
+12. Get and install the IBM tool TRSMAIN if you wish to Terse (compress)
+    your dumps before you ftp them.
+    (ftp://ftp.software.ibm.com/s390/mvs/tools/packlib/)
+
+13. Update exec BLSGSTRT to conform to your installations startup of IPCS
+
+14. Review the exec's for NJE Node information as the dumplog data set
+    (currently) is allocated based upon the current nje node.

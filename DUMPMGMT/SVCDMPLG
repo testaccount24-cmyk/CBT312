@@ -1,0 +1,15 @@
+//SVCDMPLG PROC DUMP=
+//******************************************************
+//*            D U M P  L O G  U P D A T E             *
+//*                                                    *
+//*  PARM VALUES:                                      *
+//*                                                    *
+//*        DUMP = DUMP DATASET NAME                    *
+//*                                                    *
+//******************************************************
+//COPYTMP   EXEC PGM=IKJEFT01,
+//  PARM='%SDMPLOG &DUMP'
+//SYSEXEC  DD   DISP=SHR,DSN=SYSL.ISPF.TEST.EXEC
+//         DD   DISP=SHR,DSN=SYS2.REXX.EXEC
+//SYSTSPRT  DD   SYSOUT=X
+//SYSTSIN   DD   DUMMY

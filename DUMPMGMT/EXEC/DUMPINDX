@@ -1,0 +1,405 @@
+        /* ---------------------  rexx procedure  ------------------- *
+         * Name:      DUMPINDX                                        *
+         *                                                            *
+         * Function:  Read the System Dumplog dataset and build a     *
+         *            selection table from which the dump dsname      *
+         *            can be selected and initialized for IPCS.       *
+         *                                                            *
+         * Syntax:    %DUMPINDX options                               *
+         *                                                            *
+         *            where options may be:                           *
+         *             Bottom to open at the bottom of the table      *
+         *                                                            *
+         * Author:    Lionel B. Dyck                                  *
+         *            Kaiser Permanente                               *
+         *            Walnut Creek, CA 94598                          *
+         *            (925) 926-5332                                  *
+         *            Internet: lionel.b.dyck@kp.org                  *
+         *                                                            *
+         * History:                                                   *
+         *            12/18/00 - fix for initial option               *
+         *            10/11/00 - fix for rfind                        *
+         *            11/24/99 - add generalization code for env      *
+         *                     - change from usrfind to usrrfind      *
+         *            10/29/99 - fixup parse for dsn title            *
+         *            10/20/99 - add find xx FIRST                    *
+         *            10/01/99 - fix find wrap messages               *
+         *            09/22/99 - add bottom option                    *
+         *            08/30/99 - fix table display location after del *
+         *            08/09/99 - cleanup                              *
+         *            08/06/99 - creation                             *
+         *                                                            *
+         * ---------------------------------------------------------- */
+
+        parse value "" with null bottom last_find
+
+        /* ----------------------------------------------------- *
+         * Get and process options                               *
+         * ----------------------------------------------------- */
+        arg options
+        do i = 1 to words(options)
+           w = word(options,i)
+           if abbrev("BOTTOM",w,1) = 1 then bottom = 1
+        end
+
+        /* ----------------------------------------------------- *
+         * Test for ISPF Applid of SYSD and if not then recurse  *
+         * with that Applid.                                     *
+         * ----------------------------------------------------- */
+        Address ISPEXEC
+        "VGET ZAPPLID"
+          if zapplid <> "SYSD" then do
+             "TBCreate sysdcmds names(zctverb zcttrunc zctact" ,
+                       "zctdesc) replace share nowrite"
+             zctverb = "RFIND"
+             zcttrunc = 0
+             zctact = "&usrrfind"
+             zctdesc = "RFIND for SYSD"
+             "TBAdd sysdcmds"
+             "Select CMD(%"sysvar('sysicmd') options ") Newappl(sysd)" ,
+                 "passlib scrname(SYSDumps)"
+             "TBEnd sysdcmds"
+             Exit 0
+             end
+
+        /* ----------------------------------------------------- *
+         * Get current NJE Node to set index dsname              *
+         * ----------------------------------------------------- */
+         node = sysvar('sysnode')
+         Select
+         When left(node,1) = "N" then do
+              index_dsn = "'MVS.DUMPLOG'"
+              end
+         When left(node,1) = "S"  then  do
+              lpar = mvsvar('sysname')
+              select
+                when substr(lpar,2,1) = 1  then  env = "SDEV"
+                when substr(lpar,2,1) = 2  then  env = "SPRD"
+                otherwise  env = "NCAL"
+                end
+              index_dsn = "'SYSL."env".DUMPLOG'"
+              end
+         Otherwise do
+                   say sysvar('sysicmd') "executing in an unknown",
+                     "environment.  Exiting.......Sorry"
+                   exit 8
+                   end
+         end
+
+        /* ----------------------------------------------------- *
+         * Set Defaults                                          *
+         * ----------------------------------------------------- */
+         zsel     = ""
+         ddn      = "dmp"random(4)
+         save_crp = 1
+         zctverb  = "RFIND"
+         zcttrunc = 0
+         zctdesc  = "Repeat Find"
+         zctact   = "&USRRFIND"
+         Address ISPExec,
+            "TBAdd sysdcmds"
+
+        /* ----------------------------------------------------- *
+         * Read in the system dump index file                    *
+         * ----------------------------------------------------- */
+         Start:
+         Address TSO
+         "Alloc f("ddn") shr reuse ds("index_dsn")"
+         "Execio * diskr" ddn "(finis stem in."
+         "Free  f("ddn")"
+
+        /* ----------------------------------------------------- *
+         * Create the ISPF Table to select the dumps from        *
+         * ----------------------------------------------------- */
+         Address ISPExec
+           "TBCreate" ddn "Names(zsel dsn flagid title) Nowrite Replace"
+
+        /* ----------------------------------------------------- *
+         * Reset row to where we were                            *
+         * ----------------------------------------------------- */
+         crp = save_crp
+
+        /* ----------------------------------------------------- *
+         * Now add the dump dsnames to the table                 *
+         * ----------------------------------------------------- */
+         rows = in.0 - 3
+         do i = 4 to in.0
+            parse value in.i with id 12 dsn title
+            flagid = strip(id)
+            dsn   = strip(dsn)
+            title = strip(title)
+            "TBAdd" ddn
+            end
+         Drop in.
+
+        /* ----------------------------------------------------- *
+         * Display and process the ISPF Table of system dumps    *
+         * ----------------------------------------------------- */
+         do forever
+         mult_sels = 0
+         rowcrp = 0
+         src    = 0
+
+         disp:
+         do forever
+            usrrfind = "PASSTHRU"
+            "Vput usrrfind"
+            if mult_sels = 0 then do
+              "TBTop" ddn
+              if bottom = 1 then do
+                 crp = rows - 6
+                 bottom = null
+                 end
+              "TBSkip" ddn "Number("crp")"
+              "TBDispl" ddn "Panel(DUMPINDX)" ,
+                         "Csrrow("rowcrp") AutoSel(No)"
+              end
+            else
+              "TBDispl" ddn
+            t_rc = rc
+            mult_sels = ztdsels
+            usrrfind = null
+            "vput usrrfind"
+            if t_rc > 7 then leave
+            save_crp = ztdtop
+            rowcrp   = null
+            select
+            when zcmd = "CANCEL" then
+                 signal exit_DUMPINDX
+            when zcmd = "IPCS" then do
+                "TBEnd" ddn
+                 Address TSO
+                 call call_ipcs
+                 exit 0
+                 end
+            When abbrev("BOTTOM",zcmd,1) = 1 then bottom = 1
+            When abbrev("TOP",zcmd,1)    = 1 then crp = 1
+            when zcmd = "EDIT" then
+                 signal Edit_Index
+            When words(zcmd) > 1 then do
+                 parse value zcmd with o1 o2
+                 if abbrev("FIND",o1,1) = 1 then call do_find
+                 end
+            When zcmd = "RFIND" then do
+                 zcmd = "RFIND" argument
+                 call  do_find
+                 end
+            When zsel = "S" then do
+                 zsel = ""
+                 call set_dump
+                 call exit_DUMPINDX
+                 end
+            When zsel = "T" then do
+                 zsel = ""
+                 "Control Display Save"
+                 call terse_ftp
+                 "Control Display Restore"
+                 end
+            When zsel = "D" then do
+                 Address TSO "Delete '"dsn"'"
+                 call process_log
+                 if mult_sels+0 = 1 then do
+                   "TBEnd" ddn
+                    signal Start
+                    end
+                 end
+            When zsel = "F" then do
+                 call process_log
+                 end
+            When zsel = null then nop
+            Otherwise do
+                      if zsel <> null then
+                         m_type = "Invalid Selection" zsel
+                      if zcmd <> null then
+                         m_type =  "Invalid Command" zcmd
+                      zedsmsg = "Error"
+                      zedlmsg = "An" m_type "was entered."
+                      "Setmsg Msg(isrz001)"
+                      end
+            end
+         end
+         exit 0
+
+        /* ----------------------------------------------------- *
+         * Edit the system log index and then rebuild the table  *
+         * ----------------------------------------------------- */
+         Edit_Index:
+         "TBEnd" ddn
+         "Edit Dataset("index_dsn")"
+         zedsmsg = "Refreshed"
+         zedlmsg = "The System Dump Log Index has been refreshed"
+         "Setmsg Msg(isrz001)"
+         signal start
+
+        /* ----------------------------------------------------- *
+         * Exit_DUMPINDX - exit this rexx code                   *
+         * ----------------------------------------------------- */
+         exit_DUMPINDX:
+         "TBEnd" ddn
+         exit 0
+
+        /* ----------------------------------------------------- *
+         * Terse and then FTP the Dump                           *
+         * ----------------------------------------------------- */
+         terse_ftp:
+            dumpdsn = "'"dsn"'"
+            "Display Panel(Dumptftp)"
+            call listdsi dumpdsn 'recall'
+            pp = sysalloc
+            ss = sysalloc
+            Select
+              When left(sysunits,1) = "T" then sp = "TR"
+              When left(sysunits,1) = "B" then do
+                   sp = "TR"
+                   pp = pp/3
+                   ss = ss/3
+                   parse value pp with pp "." .
+                   parse value ss with ss "." .
+                   end
+              When left(sysunits,1) = "C" then sp = "Cyl"
+              otherwise sp = "TR"
+              end
+
+            Address TSO
+            "Alloc f(infile) shr reuse ds("dumpdsn")"
+            "Alloc f(outfile) ds("tersedsn") new rel spa("pp","ss")" sp
+            "alloc f(sysprint) ds(*) reuse"
+            Address ISPExec "Select Pgm(Trsmain) Parm(PACK)"
+            "free f(infile outfile)"
+            "alloc f(sysprint) ds(*) reuse"
+            Address ISPExec
+            if ftphost <> null then do
+              ftpbopt = tersedsn "NOMVS ANONYMOUS BINARY",
+                        "HOST" ftphost
+              "Select Cmd(%FTPB" ftpbopt ") newappl(FTPB)"
+              end
+            return
+
+        /* ----------------------------------------------------- *
+         * Define the dump to IPCS and then invoke IPCS          *
+         * ----------------------------------------------------- */
+         set_dump:
+         call listdsi  "'"dsn"'" "Norecall"
+         if sysreason = 9 then
+            if left(zdlvol,6) = "MIGRAT" then
+               Address TSO "Hrecall '"dsn"' wait"
+
+         setdef = "SETDEF DSNAME('"dsn"') noconfirm terminal noprint"
+
+         Address TSO
+         "Newstack"
+         Queue setdef
+         Queue "Open Dsname"
+         Queue "End"
+         "IPCS"
+         "Delstack"
+         call caLl_ipcs
+         "Hmig '"dsn"'"
+         return
+
+        /* ----------------------------------------------------- *
+         * Invoke IPCS directly                                  *
+         * ----------------------------------------------------- */
+         call_ipcs:
+         "%blsgstrt"
+         return
+
+        /* ----------------------------------------------------- *
+         * Find sub-routine                                      *
+         * ----------------------------------------------------- */
+        Do_Find:
+              parse value zcmd with o1 argument
+              upper argument
+              argument = strip(argument)
+              if words(argument) > 1 then do
+                 if word(argument,words(argument)) = "FIRST" then do
+                 last_find = 1
+                 argument =  subword(argument,1,words(argument)-1)
+                 end
+              end
+              zsel = null
+              hit  = 1
+              hcc  = 0
+              crp  = ztdtop
+              find_loop = null
+              search    = null
+              rowid     = crp
+              if last_find = null then last_find = crp
+              if o1     = "RFIND" then
+                 last_find = last_find + 1
+              "TBTOP " ddn
+              "TBSKIP" ddn "Position(ROWID) Number("Last_find")"
+              if rc = 8 then do
+                             "TBTop" ddn
+                             "TBSKIP" ddn "Position(ROWID)"
+                             s_smsg = "Wrapped"
+                             end
+                        else s_smsg = "Found"
+
+              /* perform search */
+
+              do forever
+                 search = translate(dsn) translate(title) ,
+                          translate(flagid)
+                 if pos(argument,search) > 0 then do
+                    crp = rowid + 0
+                    rowcrp = crp
+                    last_find = crp
+                        zedsmsg = s_smsg  /* "Found" */
+                        zedlmsg = argument ,
+                                 "found during search in row:" crp
+                        "Setmsg msg(isrz001)"
+                    leave
+                    end
+                 "TBSKIP" ddn "POSITION(Rowid)"
+                 if rc = 8 then do
+                       "TBTOP" ddn
+                        s_smsg = "Wrapped"
+                    if find_loop = "on" then do
+                        zedsmsg = "Not Found"
+                        zedlmsg = argument "Not found during search"
+                        rowid = crp
+                        "Setmsg msg(isrz001)"
+                        leave
+                        end
+                        else find_loop = "on"
+                    end
+                 zsel = null
+                 end
+         return
+
+        /* ----------------------------------------------------- *
+         * Process the dump log dataset                          *
+         * ----------------------------------------------------- */
+         brocess_log:
+         Address TSO
+         "Alloc f("ddn") shr reuse ds("index_dsn")"
+         "Execio * diskr" ddn "(finis stem in."
+         out.  = ""
+         out.0 = 3
+         do i = 1 to 3
+            out.i = in.i
+            end
+         do i = 4 to in.0
+            parse value in.i with idx 12 dsnx titlex
+            dsnx = strip(dsnx)
+            kill  = 0
+            if dsn = dsnx then do
+               if zsel = 'D' then iterate
+               if zsel = 'F' then do
+                  flagid = sysvar('sysuid')
+                  in.i = left(flagid,11)""left(dsnx,45)""titlex
+                  zsel = ""
+                  Address ISPExec "TBPut" ddn
+                  end
+               end
+            o = out.0 + 1
+            out.o = in.i
+            out.0 = o
+            end
+         "Execio * diskw" ddn "(finis stem out."
+         "Free  f("ddn")"
+         drop in. out.
+         Address ISPExec
+         zsel = ""
+         return

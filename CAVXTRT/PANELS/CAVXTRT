@@ -1,0 +1,34 @@
+)Attr Default(%+_)
+/* + type(text  ) intens(low )                   information only  */
+   _ type( input) intens(high) caps(on) just(left ) color(red)
+   @ type(output) intens(high) caps(on) just(left ) color(yellow)
+   % type(text) intens(high)
+   ~ type(text) intens(high) color(blue) hilite(reverse)
+)Body Expand(\\)
+%-\-\- ~Extract CA-View Reports@ver %-\-\-
+%Command ===>_Zcmd
++
++Processing CA-View Database:@cavdb
++                            @cavdbdes
++
++Enter/Verify:
++Report ID        %===>_rptid                                    +
++Report Gen       %===>_rptgen+     * or ALL for all, 0 for current
++
++Optional:
++From Date        %===>_fromdate+   &dt      or Today or Week or Month
++To Date          %===>_todate  +   &dt      or Today (default)
++
+)Init
+ .cursor = zcmd
+ .help   = cavxtrth
+ if (&datefmt = U)
+    &dt = mm/dd/yy
+ if (&datefmt = E)
+    &dt = dd/mm/yy
+)Proc
+ if (&rptgen = &z)
+     &rptgen = *
+ ver (&rptid,nb)
+ ver (&rptgen,nb)
+)end

@@ -1,0 +1,32 @@
+)ATTR DEFAULT(%$_)
+   %   TYPE(TEXT)  INTENS(HIGH) SKIP(ON)
+   $   TYPE(TEXT)  INTENS(LOW)  SKIP(ON) COLOR(GREEN)
+   _   TYPE(INPUT) INTENS(HIGH) CAPS(ON) JUST(LEFT) HILITE(USCORE)
+)BODY EXPAND(\\)
+%Tutorial$-\-\-(%RUNC - Edit Macro$)-\-\-%Tutorial
+%Command ===>_ZCMD
+$
+$Command Types:
+$
+   %command$ TSO command                     %listd &&dataset mem
+   %CONS$    TSO Console operator command    %cons d ts,l
+   %EDIT$    ISPF Edit commands              %edit c xx &&to all$
+   %EJES$    (E)JES operator commands        %ejes d ts,l
+   %EJES$    EJES Status                     %ejes st &&jobid
+   %ISPF$    ISPF commands                   %select panel(&&panel)
+   %OMVS$    OMVS commands                   %omvs ls -la &&direct
+   %SDSF$    SDSF operator commands          %sdsf d ts,l
+   %SDSF$    SDSF Status                     %sdsf st &&jobid
+$
+   %edit, ejes, sdsf,$and%omvs$commands may be stacked using%;$between commands
+$
+$   Commands may be continued across multiple records using a%+$thus:
+$
+$   000100%listd +
+$   000200%  &&dataset mem
+$
+$ \ \ (press%ENTER$to continue) \ \
+)PROC
+  &ZUP     = #RUNC2A
+  &ZCONT   = #RUNC3
+)END

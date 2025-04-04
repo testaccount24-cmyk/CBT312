@@ -1,0 +1,32 @@
+)ATTR DEFAULT(%$_)
+   %   TYPE(TEXT)  INTENS(HIGH) SKIP(ON)
+   $   TYPE(TEXT)  INTENS(LOW)  SKIP(ON) COLOR(GREEN)
+   _   TYPE(INPUT) INTENS(HIGH) CAPS(ON) JUST(LEFT) HILITE(USCORE)
+)BODY EXPAND(\\)
+%Tutorial$-\-\-(%RUNC - Edit Macro$)-\-\-%Tutorial
+%Command ===>_ZCMD
+$
+%<DOC><TITLE></DOC>$and%<EXIT n>$Statements
+$
+%    <DOC>
+%    <TITLE>popup title
+%    doc record 1
+%        doc record 2
+%    </DOC>
+%    <EXIT rc>
+%
+$ 1.%<DOC>$and%</DOC>$must be the only text on the statements
+$ 2.%<TITLE>$is up to 32 characters used for the title for the popup panel
+$ 3. Documentation records may be up to 72 characters
+$ 4. Symbolics are allowed in both title and documentation records
+$ 5. There is no effective limit on the number of documentation records
+$ 6. Leading blanks are honored in documentation records
+$ 7. Popup Panel is a ISPF Table which is scrollable
+$ 8.%<EXIT rc>$will exit processing if the rc is equal or greater than the
+$    last return code.
+$
+$ \ \ (press%ENTER$to continue) \ \
+)PROC
+  &ZUP     = #RUNC2B
+  &ZCONT   = #RUNC3A
+)END
