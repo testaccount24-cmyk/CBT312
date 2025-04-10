@@ -1,0 +1,107 @@
+/* --------------------  rexx procedure  -------------------- *
+ * Name:      OMVSPAXB                                        *
+ *                                                            *
+ * Function:  Backup an OMVS directory, with subdirectories,  *
+ *            to a z/OS dataset. Both will be prompted for    *
+ *            using an ISPF panel.                            *
+ *                                                            *
+ * Syntax:    %OMVSPAXB                                       *
+ *                                                            *
+ * Dependencies:                                              *
+ *                                                            *
+ *            1. STEMVIEW for viewing the results of the      *
+ *               backup                                       *
+ *                                                            *
+ * Author:    Lionel B. Dyck                                  *
+ *                                                            *
+ * History:                                                   *
+ *            09/12/20 - Minor tweak                          *
+ *            08/01/16 - Correct truncation issue when        *
+ *                       exec is converted from vb to fb      *
+ *            07/22/16 - Add -W seqparms for space            *
+ *                     - calc space needed from du -k         *
+ *            07/08/16 - Add -x pax to pax command            *
+ *            07/06/16 - Prime omvs dir with users home       *
+ *                     - Convert from TAR to PAX              *
+ *            07/05/16 - Creation                             *
+ *                                                            *
+ * ---------------------------------------------------------- */
+
+/* --------------- *
+ * Define defaults *
+ * --------------- */
+  null = ''
+  Address ISPExec
+
+/* ------------------------------- *
+ * Get the users home directory to *
+ * prime the backup panel.         *
+ * ------------------------------- */
+  cmd = 'pwd'
+  rc = bpxwunix(cmd,,stdout.,stderr.)
+  omvsdir = strip(stdout.1)
+
+/* ------------------------------------ *
+ * Display the panel prompting for info *
+ * ------------------------------------ */
+  do forever
+    "Display Panel(OMVSPAXB)"
+    if rc > 3 then leave
+    call do_it
+  end
+  Exit 0
+
+Do_It:
+/* ------------- *
+ * Test for info *
+ * ------------- */
+  zedsmsg = null
+  if zobkdsn /= null then
+  if 'OK' = sysdsn(zobkdsn) then do
+    zedsmsg = 'Error'
+    zedlmsg = zobkdsn 'currently exists.  Specify a different' ,
+      'z/OS dataset name.'
+    'setmsg msg(isrz001)'
+  end
+  'vput (zobkdsn) profile'
+
+/* ----------------------------------------------- *
+ * Test to validate that the omvs directory exists *
+ * ----------------------------------------------- */
+  cmd = 'ls -la' omvsdir
+  drop stdout. stedrr.
+  rc = bpxwunix(cmd,,stdout.,stderr.)
+  if rc > 0 then do
+    zedsmsg = 'Error'
+    zedlmsg = stderr.1
+    'setmsg msg(isrz001)'
+    return
+  end
+
+  if zedsmsg = null then do
+    /* get space used first */
+    x = bpxwunix('cd' omvsdir';du -k .',,stdout.,stderr.)
+    tline = stdout.0
+    parse value stdout.tline with size .
+    if size < 100 then size = 100
+    else size = size % 10
+    parms = 'pax -x pax -W',
+      '"seqparms='"'SPACE=(TRK,("size","size")),BLKSIZE=32720'"'" -wzvf'
+    cmd = 'cd' omvsdir '&& 'parms '"//'zobkdsn'" .'
+    call dopop
+    x = bpxwunix(cmd,,stdout.,stderr.)
+    if stdout.0 > 0 then
+    CALL stemview 'Browse','stdout.',,,"Backup"
+    /* the pax output goes to stderr. for some reason */
+    if stderr.0 > 0 then
+    CALL stemview 'Browse','stderr.',,,"Backup"
+  end
+
+  return
+
+DoPOP:
+  'Control Display Lock'
+  'Addpop'
+  'Display Panel(omvspaxp)'
+  'Rempop'
+  return

@@ -1,0 +1,18 @@
+)Attr Default(%+_)
+/* _ type( input) intens(high) caps(on ) just(left )               */
+   @ type( input) intens(high) caps(off) just(asis ) color(white) pad('_')
+   ~ type(text) intens(high) caps(off) just(asis ) color(turq)
+   + type(text  ) intens(low )
+     skip(on)
+)Body Window(61,12)
+%-------------+ Rexx Documentation Text Entry +-------------
+%Command ===>_zcmd                       +Scroll ===>_zcsr+
+~ Commands: Cancel or Insert (I #)
+~ Use a . in column 1 for a blank line.
+)Model
+@z                                                        +<
+)Init
+  &zcsr = CSR
+  .ZVARS = '(rxline)'
+)Proc
+)End

@@ -1,0 +1,31 @@
+This partitioned dataset contains the ISPFCMDS ISPF command  package.
+
+The members of this file are:
+    $DOC       What you are reading
+    CHANGES    Change History
+    ISPFCMDS   The REXX Exec
+    SAMPLE     Sample usage of ISPFCMDS
+    USERGDE    Brief User Guide
+
+Author:    Lionel B. Dyck
+           Kaiser Permanente Information Technology
+           Walnut Creek, CA 94598
+           (925) 926-5332
+           E-Mail: lionel.b.dyck@kp.org
+
+Installation:
+
+    1. Copy the ISPFCMDS member into your production SYSEXEC or SYSPROC
+       library.
+    2. Copy the Sample member into your personal Exec or Clist library
+       and tailor for your purposes.
+    3. Inform your users about this
+
+Comments, suggestions, and complaints may be sent to the author via e-mail
+at lionel.b.dyck@kp.org
+
+Warranty:
+There is no warranty associated with this code or guarantee that it
+will work in your environment. Neither the author or his employer can
+be help responsible for any issues, positive or negative, associated
+with the use of this code.

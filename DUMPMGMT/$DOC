@@ -1,0 +1,29 @@
+This partitioned data set contains the Kaiser System Dump Management
+ISPF application. It is being made available because there have been
+a number of requests for this type of tool.
+Note: There may be some local customizations required in your shop
+if you decide to use this.
+
+Contents:
+   $DOC     what you are reading
+   DUMPLOG  sample dumplog with headers
+   EXEC     REXX Exec library in TSO Transmit format
+   NOTES    Install and usage notes
+   OVERVIEW Summary of each key element of the package
+   PANELS   ISPF Panel library in TSO Transmit format
+   RECEIVE  command to 'explode' the EXEC and PANELS members into
+            real data sets
+   SVCDMPLG SYS1.PROCLIB member for stc to be invoked by automation
+            when a system dump occurs IEA611I and issue command
+            S SVCDMPLG,DUMP=dump.data.set.name
+
+Comments, suggestions, bug reports may be sent to the author (see $DOC)
+
+Warranty: None.
+
+Author:    Lionel B. Dyck
+           Kaiser Permanente Information Technology
+           25 N. Via Monte Ave.
+           Walnut Creek, CA 94598
+           (925) 926-5332
+           Internet: lionel.b.dyck@kp.org

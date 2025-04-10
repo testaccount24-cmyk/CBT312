@@ -1,0 +1,27 @@
+)ATTR DEFAULT(%+_)
+   % TYPE(TEXT)   INTENS(HIGH) COLOR(WHITE) SKIP(ON)
+   @ type(output) intens(high) color(turq) caps(off)
+   + TYPE(TEXT)   INTENS(LOW)  COLOR(turq) SKIP(ON)
+   ~ type(text) intens(high) color(turq) hilite(reverse)
+)Body  Expand(\\)
+%-\-\-~OMVS Syslog Display%-\-\-
+%Command ==>_ZCMD
++
+%                  @logtitle
++
++Display the OMVS Log file for the a specified application.
++
++Line commands are B to Browse or V to View the file.
++
++Commands are:  EXCLUDE lpar     to exclude all records for that lpar
++               ONLY lpar        to only show records for that lpar
++               SORT column      to sort a column
++                                - DATE
++                                - LPAR
++                                - FILE
++                                * sort will be ascending then descending
++               REfresh          to rebuild the list of files
++
+)INIT
+)PROC
+)END

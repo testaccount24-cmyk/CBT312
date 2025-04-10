@@ -1,0 +1,798 @@
+  /* --------------------  rexx procedure  -------------------- *
+  | Name:      PDS2PDSE                                        |
+  |                                                            |
+  | Function:  Create a copy of a PDS as a PDSE                |
+  |                                                            |
+  | Syntax:    %PDS2PDSE from-pds to-pdse options              |
+  |                                                            |
+  |            from-pds  - from PDS Dsname                     |
+  |            to-pdse   - target PDSE                         |
+  |                                                            |
+  |            options:                                        |
+  |            MG(nnn)   - Member generation count             |
+  |            VOL(vol)  - defines the volser for the to pdse  |
+  |            SWAP      - rename To to From and vice versa    |
+  |                        append .O to end of From            |
+  |                                                            |
+  | Dependencies:                                              |
+  |            Uses the PDS command for the copy               |
+  |                                                            |
+  | Author:    Lionel B. Dyck                                  |
+  |                                                            |
+  | History:  (most recent on top)                             |
+  |            05/27/21 - Correct allocation failure handling  |
+  |            05/27/21 - Increase primary/secondary by double |
+  |                     - Support Profile NoPrefix             |
+  |            05/27/21 - If ISPF and no parms (or no to)      |
+  |                       display a panel                      |
+  |            05/26/21 - Support PROFILE NOPREFIX users       |
+  |            05/26/21 - Default maxgen to system max         |
+  |                     - Add SWAP option                      |
+  |            05/02/18 - Cleanup and Add Comments             |
+  |            05/01/18 - Allow fully qualified or no          |
+  |                       quotes in from/to dsnames            |
+  |            04/30/18 - Creation                             |
+  |                                                            |
+  * ---------------------------------------------------------- */
+  arg options
+
+  /* ------------------- *
+  | Define our defaults |
+  * ------------------- */
+  parse value '' with null mg volser swap
+  ispf_status = sysvar('sysispf')
+
+  /* -------------------------------- *
+  | Validate the provided parameters |
+  * -------------------------------- */
+  if length(options) = 0 then do
+    msg = 'No options provided'
+    if ispf_status /= 'ACTIVE' then
+    call do_syntax
+  end
+
+  if words(options) < 2 then do
+    msg = 'Invalid options provided'
+    if ispf_status /= 'ACTIVE' then
+    call do_syntax
+  end
+
+  /* ------------------------ *
+  | Parse the provided parms |
+  * ------------------------ */
+  parse value options with from to options
+
+  /* -------------------------------------- *
+  | Validate the FROM and TO dataset names |
+  * -------------------------------------- */
+  from = fixup_dsname(from)
+  to   = fixup_dsname(to)
+
+  if from /= 0 then
+  if sysdsn("'"from"'") /= 'OK' then do
+    msg = 'From DSN invalid:' from sysdsn("'"from"'")
+    if ispf_status /= 'ACTIVE' then
+    call do_syntax
+  end
+  if to /= 0 then
+  if sysdsn("'"to"'") = 'OK' then do
+    msg = 'To DSN exists:' "'"to"'"
+    if ispf_status /= 'ACTIVE' then
+    call do_syntax
+  end
+
+  if from = 0 then from = null
+  if to   = 0 then to   = null
+
+  /* ---------------------------- *
+  | Process the provided options |
+  * ---------------------------- */
+  if words(options) > 0 then do i = 1 to words(options)
+    Select
+      When wordpos('SWAP',options) > 0 then swap = 1
+      When pos('VOL(',word(options,i)) > 0 then
+      parse value word(options,i) with 'VOL('volser')'
+      When pos('MG(',word(options,i)) > 0 then
+      parse value word(options,i) with 'MG('mg')'
+      Otherwise do
+        msg = word(options,i) 'is an invalid option'
+        if ispf_status /= 'ACTIVE' then
+        call do_syntax
+      end
+    end
+  end
+
+  mgl = get_maxgen()
+  mg  = mgl
+  if msg /= null then
+  if ispf_status = 'ACTIVE' then do
+    load_info = loadispf()
+    Address ISPExec
+    if from /= null then
+       if left(from,1) /= "'" then
+       from = "'"from"'"
+    if to   /= null then
+       if left(to,1) /= "'" then
+       to   = "'"to"'"
+    do forever
+      'Display Panel(pds2pdse)'
+      if rc > 0 then do
+        x = dropispf(load_info)
+        exit
+      end
+      else do
+        from = strip(from,'B',"'")
+        to   = strip(to,'B',"'")
+        call doit
+        from = "'"from"'"
+        to   = "'"to"'"
+      end
+    end
+  end
+
+doit:
+  Address TSO
+
+  if mg  = null then mg = get_maxgen()
+
+  /* --------------------------------- *
+  | Get the space for the current PDS |
+  * --------------------------------- */
+  call listdsi "'"from"'"
+  prim = sysprimary
+  sec  = sysseconds
+  unit = left(sysunits,1)
+  if unit = 'T' then unit = 'TRACKS'
+  if unit = 'C' then unit = 'CYLINDERS'
+  if unit = 'B' then do
+    unit = 'TRACKS'
+  end
+
+  if unit = 'TRACKS' then do
+    pt = prim%15
+    if pt = 0 then prim = 15
+    else do
+      pr = prim//15
+      prim = prim + pr
+    end
+  end
+
+  /* --------------------------------------------- *
+   | Add additional space to primary and secondary |
+   | for the member generations.                   |
+   * --------------------------------------------- */
+  prim = prim * 2
+  sec  = sec  * 2
+
+  if mg > 0
+  then mga = 'Maxgens('mg')'
+  else mga = null
+
+  if volser /= null
+  then vol = 'VOL('volser')'
+  else vol = null
+
+  if ispf_status /= 'ACTIVE' then do
+    Say 'PDS2PDSE - Copy PDS to PDSE'
+    say ' '
+    say 'From PDS:' from
+    say 'To PDSE: ' to
+    if volser /= null then say vol
+    if mga    /= null then say mga
+  end
+  else do
+    msg1 = 'Performing Copy Operation'
+    msg2 = 'From PDS:   ' "'"from"'"
+    msg3 = 'Target PDSE:' "'"to"'"
+    msg4 = null
+    call do_popup
+  end
+
+  /* --------------------------------------------- *
+  | Perform the Allocation of the Target/New PDSE |
+  * --------------------------------------------- */
+  "Alloc ds('"to"') new spa("prim sec")" unit mga ,
+    "Like('"from"')" vol "DSNType(Library,2)"
+   if rc > 0 then do
+      if ispf_status /= 'ACTIVE' then do
+         say 'Allocation failure.'
+         exit 8
+         end
+      else do
+           zedsmsg = 'Failure.'
+           zedlmsg = 'Allocation failure.'
+           Address ISPExec 'setmsg msg(isrz001)'
+           return
+           end
+      end
+  /* ------------------- *
+  | Free the Allocation |
+  * ------------------- */
+  "Free ds('"to"')"
+
+  if ispf_status /= 'ACTIVE' then do
+    say ' '
+    say 'Invoking the PDS command to do the Copy:'
+    say ' '
+  end
+  else do
+    msg1 = null
+    msg2 = 'Invoking the PDS command to perform Copy'
+    msg3 = null
+    msg4 = null
+    call do_popup
+  end
+
+  call outtrap 'x.'
+  "PDS '"from"' Copy : '"to"' shr nolist"
+  call outtrap 'off'
+
+  if swap = 'N' then return
+
+  if ispf_status /= 'ACTIVE' then do
+    say ' '
+    say 'Swapping the dataset names:'
+    say ' '
+
+    say  "rename '"from"' '"from".o'"
+  end
+  else do
+    parse value '' with msg1 msg2 msg3 msg4
+    msg2 = "Rename Swap '"from"' '"from".o'"
+    call do_popup
+  end
+
+  "rename '"from"' '"from".o'"
+  if rc > 0 then do
+    if ispf_status /= 'ACTIVE'  then do
+      say 'Rename failed...'
+      exit 8
+    end
+    else do
+      zedsmsg = 'Failed.'
+      zedlmsg = left('Rename swap failed:',73) ,
+        left("'"from"' to",73) ,
+        "'"from".o'"
+      Address ISPExec 'setmsg msg(isrz001)'
+      return
+    end
+  end
+
+  if ispf_status /= 'ACTIVE' then
+  say  "rename '"to"' '"from"'"
+  else do
+    msg2 = "Rename Swap '"to"' '"from"'"
+    call do_popup
+  end
+  "rename '"to"' '"from"'"
+  if rc > 0 then do
+    if ispf_status /= 'ACTIVE'  then do
+      say 'Rename failed...'
+      exit 8
+    end
+    else do
+      zedsmsg = 'Failed.'
+      zedlmsg = left('Rename swap failed:',73) ,
+        left("'"to"' to",73) ,
+        "'"from"'"
+      Address ISPExec 'setmsg msg(isrz001)'
+      return
+    end
+  end
+
+  if ispf_status /= 'ACTIVE' then
+  say  "rename '"from".o' '"to"'"
+  else do
+    msg2 = "Rename Swap '"from".o' '"to"'"
+    call do_popup
+  end
+  "rename '"from".o' '"to"'"
+  if rc > 0 then do
+    if ispf_status /= 'ACTIVE'  then do
+      say 'Rename failed...'
+      exit 8
+    end
+    else do
+      zedsmsg = 'Failed.'
+      zedlmsg = left('Rename swap failed:',73) ,
+        left("'"from".o' to",73) ,
+        "'"to"'"
+      Address ISPExec 'setmsg msg(isrz001)'
+      return
+    end
+  end
+
+  if ispf_status = 'ACTIVE' then do
+    zedsmsg = 'Success'
+    zedlmsg = 'PDS to PDSE operation completed'
+    Address ISPExec 'setmsg msg(isrz001)'
+    return
+  end
+  Exit 0
+
+  /* ----------------------------- *
+  | Report out the correct Syntax |
+  * ----------------------------- */
+Do_Syntax:
+  say 'PDS2PDSE Command Error:'
+  say msg
+  say ' '
+  say 'Syntax is:'
+  say '   %pds2pdse from-pds to-pdse options'
+  say ' '
+  say '   from-pds is a PDS to be copied into a new PDSE'
+  say ' '
+  say '   to-pdse must not exist and is the name for the new PDSE'
+  say ' '
+  say 'Supported options:'
+  say ' '
+  say '   MG(nnn) - Member generation count '
+  say ' '
+  say '   VOL(volser) - volser for the to-pdse'
+  say ' '
+  say '   SWAP - Swap the dataset names'
+  say ' '
+  exit 8
+
+  /* ------------------------------------- *
+  | Fixup the Dataset Names               |
+  | - fully qualified - remove the quotes |
+  | - not fully qualified                 |
+  |   - prepend user prefix or userid     |
+  * ------------------------------------- */
+Fixup_dsname: procedure expose null
+  arg dsname
+  if dsname = null then return 0
+  if left(dsname,1) = "'" then do
+    return substr(dsname,2,length(dsname)-2)
+  end
+  else do
+    if sysvar('syspref') = null
+    then return dsname
+    else do
+      hlq = sysvar('syspref')
+      return hlq'.'dsname
+    end
+  end
+
+Get_MaxGen: Procedure
+  /* ----------------------------- *
+  * Get the current MAXGENS_LIMIT *
+  * ----------------------------- */
+  Numeric Digits 10
+  CVT      = C2D(Storage(10,4))
+  CVTDFA   = C2D(Storage(D2X(CVT + 1216),4))   /* cvt + 4c0 */
+  DFAMGEN  = C2D(Storage(D2X(cvtdfa + 76),4))  /* dfa + 4c */
+  return dfamgen
+
+  /* ---------------------------------------- *
+  | Common routine for normal (1 line) popup |
+  * ---------------------------------------- */
+Do_Popup:
+  Address ISPExec
+  call pfshow 'off'           /* make sure pfshow is off */
+  'Control Display Lock'
+  'Addpop row(4) column(8)'
+  'Display Panel(pdspop)'
+  'Rempop'
+  call pfshow 'reset'         /* restore pfshow setting */
+  Address TSO
+  return
+
+pfshow:
+  if zpfshow = 'OFF' then return
+  arg pfkopt
+  if pfkopt = 'RESET' then do
+    if pfkeys = 'ON' then
+    'select pgm(ispopf) parm(FKA,ON)'
+  end
+  if pfkopt = 'OFF' then do
+    'vget (zpfshow)'
+    pfkeys = zpfshow
+    if pfkeys /= 'OFF' then
+    'select pgm(ispopf) parm(FKA,OFF)'
+  end
+  return
+
+/* Start of the inline ISPF Panels - leave in this comment
+>Panel pds2pdse
+)Attr
+ _ type(input ) hilite(uscore) intens(low)
+ @ type(output) intens(high) just(left)
+)Body Expand(\\)
++-\-\%PDS to PDSE w/Member Generations+-\-\-
++Command ===>_zcmd
++
++Current PDS/PDSE: _from                                          +
++Target PDSE:      _to                                            +
++
++Options:
++Generation Limit: _mg +   default is the system limit of@mgl      +
++Rename Swap:      _z+     Y(es) or N(o) to rename target to current
++                          and vice versa
++Volser for Target:_volser+
++
+)Init
+ .zvars = '(swap)'
+ if (&swap = &Z)
+     &swap = 'Y'
+ .cursor = from
+)Proc
+ &resp = .resp
+*REXX(* resp zedsmsg zedlmsg csr)
+  if resp = 'END' then exit
+  parse value '' with zedsmsg zedlmsg null
+  if left(from,1) /= "'" then do
+    if sysvar('syspref') /= null
+    then from = "'"sysvar('syspref')"."from"'"
+    else from = "'"sysvar('sysuid')"."from"'"
+  end
+  if left(to,1) /= "'" then do
+    if sysvar('syspref') /= null
+    then to = "'"sysvar('syspref')"."to"'"
+    else to = "'"sysvar('sysuid')"."to"'"
+  end
+  x = listdsi(from)
+  if x > 0 then do
+    zedsmsg = 'Error.'
+    zedlmsg = sysmsglvl2
+    csr = 'FROM'
+  end
+  if zedsmsg = null then do
+    x = listdsi(to)
+    if x = 0 then do
+      zedsmsg = 'Error.'
+      zedlmsg = 'Target dataset exists and it must not - try again.'
+      csr = 'TO'
+    end
+  end
+*ENDREXX
+ if (&zedsmsg NE &Z)
+    .msg = isrz001
+    .cursor = &csr
+ if (&zedsmsg EQ &Z)
+    ver (&from,nb,dsnameq)
+    ver (&to,nb,dsnameq)
+    ver (&mg,range,0,&mgl)
+    &swap = trans(trunc(&swap,1) Y,Y N,N *,*)
+    ver (&swap,nb,list,Y,N)
+)End
+>Panel pdspop
+)Attr
+ @ type(output) intens(low)
+)Body Window(60,6)
++
+  @msg1
+  @msg2
+  @msg3
+  @msg4
++
+)Init
+)Proc
+)End
+>End    End of the inline ISPF Panels comment */
+
+/* --------------------  rexx procedure  -------------------- *
+ * Name:      LoadISPF                                        *
+ *                                                            *
+ * Function:  Load ISPF elements that are inline in the       *
+ *            REXX source code.                               *
+ *                                                            *
+ * Syntax:    load_info = loadispf()                          *
+ *            rc = dropispf(load_info)                        *
+ *                                                            *
+ *            The inline ISPF resources are limited to        *
+ *            ISPF Messages, Panels, and Skeletons,           *
+ *                 CLISTs and EXECs are also supported.       *
+ *                                                            *
+ *            The inline resources must start in column 1     *
+ *            and use the following syntax:                   *
+ *                                                            *
+ *            >START    used to indicate the start of the     *
+ *                      inline data                           *
+ *                                                            *
+ *            >END    - used to indicate the end of the       *
+ *                      inline data                           *
+ *                                                            *
+ *            Each resource begins with a type record:        *
+ *            >type name                                      *
+ *               where type is CLIST, EXEC, MSG, PANEL, SKEL  *
+ *                     name is the name of the element        *
+ *                                                            *
+ * Sample usage:                                              *
+ *          -* rexx *-                                        *
+ *          load_info = loadispf()                            *
+ *          ... magic code happens here (your code) ...       *
+ *          rc = dropispf(load_info)                          *
+ *          exit                                              *
+ *          >Start inline elements                            *
+ *          >Panel panel1                                     *
+ *          ...                                               *
+ *          >Msg msg1                                         *
+ *          ...                                               *
+ *          >End of inline elements                           *
+ *                                                            *
+ * Returns:   the list of ddnames allocated for use along     *
+ *            with the libdef's performed or altlib           *
+ *                                                            *
+ *            format is ddname libdef ddname libdef ...       *
+ *                   libdef may be altlibc or altlibe         *
+ *                   for altlib clist or altlib exec          *
+ *                                                            *
+ * Notes:     Entire routine must be included with REXX       *
+ *            exec - inline with the code.                    *
+ *                                                            *
+ * Comments:  The entire rexx program is processed from the   *
+ *            last record to the first to find the >START     *
+ *            record at which point all records from that     *
+ *            point on are processed until the >END           *
+ *            statement or the end of the program is found.   *
+ *                                                            *
+ *            It is *strongly* suggested that the inline      *
+ *            elements be at the very end of your code so     *
+ *            that the search for them is faster.             *
+ *                                                            *
+ *            Inline ISPTLIB or ISPLLIB were not supported    *
+ *            because the values for these would have to be   *
+ *            in hex.                                         *
+ *                                                            *
+ * Author:    Lionel B. Dyck                                  *
+ *                                                            *
+ * History:                                                   *
+ *            01/09/19 - Include DROPISPF routine             *
+ *            08/29/17 - Fixup static values that were vars   *
+ *            05/31/17 - Change default directory count       *
+ *            12/09/16 - update for add_it routine            *
+ *            05/10/16 - correction for clist and exec        *
+ *            04/19/16 - bug correction                       *
+ *            06/04/04 - Enhancements for speed               *
+ *            08/05/02 - Creation                             *
+ *                                                            *
+ * ---------------------------------------------------------- *
+ * Disclaimer: There is no warranty, either explicit or       *
+ * implied with this code. Use it at your own risk as there   *
+ * is no recourse from either the author or his employeer.    *
+ * ---------------------------------------------------------- */
+LoadISPF: Procedure
+
+  parse value "" with null kmsg kpanel kskel first returns ,
+    kclist kexec
+/* ------------------------------------------------------- *
+ * Find the InLine ISPF Elements and load them into a stem *
+ * variable.                                               *
+ *                                                         *
+ * Elements keyword syntax:                                *
+ * >START - start of inline data                           *
+ * >CLIST name                                             *
+ * >EXEC name                                              *
+ * >MSG name                                               *
+ * >PANEL name                                             *
+ * >SKEL name                                              *
+ * >END   - end of all inline data (optional if last)      *
+ * ------------------------------------------------------- */
+  last_line = sourceline()
+  do i = last_line to 1 by -1
+    line = sourceline(i)
+    if translate(left(line,6)) = ">START " then leave
+  end
+  rec = 0
+/* --------------------------------------------------- *
+ * Flag types of ISPF resources by testing each record *
+ * then add each record to the data. stem variable.    *
+ * --------------------------------------------------- */
+  do j = i+1 to last_line
+    line = sourceline(j)
+    if translate(left(line,5)) = ">END "   then leave
+    if translate(left(line,7)) = ">CLIST " then kclist = 1
+    if translate(left(line,6)) = ">EXEC "  then kexec  = 1
+    if translate(left(line,5)) = ">MSG "   then kmsg   = 1
+    if translate(left(line,7)) = ">PANEL " then kpanel = 1
+    if translate(left(line,6)) = ">SKEL "  then kskel  = 1
+    rec  = rec + 1
+    data.rec = line
+  end
+
+/* ----------------------------------------------------- *
+ * Now create the Library and Load the Member(s)         *
+ * ----------------------------------------------------- */
+  Address ISPExec
+/* ----------------------------- *
+ * Assign dynamic random ddnames *
+ * ----------------------------- */
+  clistdd = "lc"random(999)
+  execdd  = "le"random(999)
+  msgdd   = "lm"random(999)
+  paneldd = "lp"random(999)
+  skeldd  = "ls"random(999)
+
+/* ---------------------------------------- *
+ *  LmInit and LmOpen each resource library *
+ * ---------------------------------------- */
+  if kclist <> null then do
+    call alloc_dd clistdd
+    "Lminit dataid(clist) ddname("clistdd")"
+    "LmOpen dataid("clist") Option(Output)"
+    returns = strip(returns clistdd 'ALTLIBC')
+  end
+  if kexec <> null then do
+    call alloc_dd execdd
+    "Lminit dataid(exec) ddname("execdd")"
+    "LmOpen dataid("exec") Option(Output)"
+    returns = strip(returns execdd 'ALTLIBE')
+  end
+  if kmsg <> null then do
+    call alloc_dd msgdd
+    "Lminit dataid(msg) ddname("msgdd")"
+    "LmOpen dataid("msg") Option(Output)"
+    returns = strip(returns msgdd 'ISPMLIB')
+  end
+  if kpanel <> null then do
+    call alloc_dd paneldd
+    "Lminit dataid(panel) ddname("paneldd")"
+    "LmOpen dataid("panel") Option(Output)"
+    returns = strip(returns paneldd 'ISPPLIB')
+  end
+  if kskel <> null then do
+    call alloc_dd skeldd
+    "Lminit dataid(skel) ddname("skeldd")"
+    "LmOpen dataid("skel") Option(Output)"
+    returns = strip(returns skeldd 'ISPSLIB')
+  end
+
+/* ----------------------------------------------- *
+ * Process all records in the data. stem variable. *
+ * ----------------------------------------------- */
+  do i = 1 to rec
+    record = data.i
+    recordu = translate(record)
+    if left(recordu,5) = ">END " then leave
+    if left(recordu,7) = ">CLIST " then do
+      if first = 1 then call add_it
+      type = "Clist"
+      first = 1
+      parse value record with x name
+      iterate
+    end
+    if left(recordu,6) = ">EXEC " then do
+      if first = 1 then call add_it
+      type = "Exec"
+      first = 1
+      parse value record with x name
+      iterate
+    end
+    if left(recordu,5) = ">MSG " then do
+      if first = 1 then call add_it
+      type = "Msg"
+      first = 1
+      parse value record with x name
+      iterate
+    end
+    if left(recordu,7) = ">PANEL " then do
+      if first = 1 then call add_it
+      type = "Panel"
+      first = 1
+      parse value record with x name
+      iterate
+    end
+    if left(recordu,6) = ">SKEL " then do
+      if first = 1 then call add_it
+      type = "Skel"
+      first = 1
+      parse value record with x name
+      iterate
+    end
+   /* --------------------------------------------*
+    * Put the record into the appropriate library *
+    * based on the record type.                   *
+    * ------------------------------------------- */
+    Select
+      When type = "Clist" then
+      "LmPut dataid("clist") MODE(INVAR)" ,
+        "DataLoc(record) DataLen(255)"
+      When type = "Exec" then
+      "LmPut dataid("exec") MODE(INVAR)" ,
+        "DataLoc(record) DataLen(255)"
+      When type = "Msg" then
+      "LmPut dataid("msg") MODE(INVAR)" ,
+        "DataLoc(record) DataLen(80)"
+      When type = "Panel" then
+      "LmPut dataid("panel") MODE(INVAR)" ,
+        "DataLoc(record) DataLen(80)"
+      When type = "Skel" then
+      "LmPut dataid("skel") MODE(INVAR)" ,
+        "DataLoc(record) DataLen(80)"
+      Otherwise nop
+    end
+  end
+  if type <> null then call add_it
+/* ---------------------------------------------------- *
+ * Processing completed - now lmfree the allocation and *
+ * Libdef the library.                                  *
+ * ---------------------------------------------------- */
+  if kclist <> null then do
+    Address TSO,
+      "Altlib Act Application(Clist) File("clistdd")"
+    "LmFree dataid("clist")"
+  end
+  if kexec <> null then do
+    Address TSO,
+      "Altlib Act Application(Exec) File("execdd")"
+    "LmFree dataid("exec")"
+  end
+  if kmsg <> null then do
+    "LmFree dataid("msg")"
+    "Libdef ISPMlib Library ID("msgdd") Stack"
+  end
+  if kpanel <> null then do
+    "Libdef ISPPlib Library ID("paneldd") Stack"
+    "LmFree dataid("panel")"
+  end
+  if kskel <> null then do
+    "Libdef ISPSlib Library ID("skeldd") Stack"
+    "LmFree dataid("skel")"
+  end
+  return returns
+
+/* --------------------------- *
+ * Add the Member using LmmAdd *
+ * based upon type of resource *
+ * --------------------------- */
+Add_It:
+  Select
+    When type = "Clist" then
+    "LmmAdd dataid("clist") Member("name")"
+    When type = "Exec" then
+    "LmmAdd dataid("exec") Member("name")"
+    When type = "Msg" then
+    "LmmAdd dataid("msg") Member("name")"
+    When type = "Panel" then
+    "LmmAdd dataid("panel") Member("name")"
+    When type = "Skel" then
+    "LmmAdd dataid("skel") Member("name")"
+    Otherwise nop
+  end
+  type = null
+  return
+
+/* ------------------------------ *
+ * ALlocate the temp ispf library *
+ * ------------------------------ */
+Alloc_DD:
+  arg dd
+  Address TSO
+  if pos(left(dd,2),"lc le") > 0 then
+  "Alloc f("dd") unit(sysda) spa(5,5) dir(5)",
+    "recfm(v b) lrecl(255) blksize(32760)"
+  else
+  "Alloc f("dd") unit(sysda) spa(5,5) dir(5)",
+    "recfm(f b) lrecl(80) blksize(23440)"
+  return
+
+/* --------------------  rexx procedure  -------------------- *
+ * Name:      DropISPF                                        *
+ *                                                            *
+ * Function:  Remove ISPF LIBDEF's and deactivate ALTLIB's    *
+ *            that were created by the LoadISPF function.     *
+ *                                                            *
+ * Syntax:    rc = dropispf(load_info)                        *
+ *                                                            *
+ * Author:    Janko                                           *
+ *                                                            *
+ * History:                                                   *
+ *            12/05/18 - Creation                             *
+ * ---------------------------------------------------------- */
+DropISPF: Procedure
+  arg load_info
+  Address ISPEXEC
+  do until length(load_info) = 0
+    parse value load_info with dd libd load_info
+    if left(libd,6) = "ALTLIB" then do
+      if libd = "ALTLIBC" then lib = "CLIST"
+      else lib = "EXEC"
+      Address TSO,
+        "Altlib Deact Application("lib")"
+    end
+    else "libdef" libd
+    address tso "free f("dd")"
+  end
+  return 0

@@ -1,0 +1,20 @@
+This member demonstrates the use of an inline ISPF Edit macro
+that has been placed within the content of this member.
+
+Execute the inline ISPF Edit Macro by placing an S on the row with <EM>
+and it will insert a dozen rows after the record with Sample in column 1.
+
+<em>
+address isredit
+'macro'
+"Find 'Sample' 1 first"
+'(loc) = linenum .zcsr'
+do i = 1 to 12
+   text = 'Random Number' right(i,2) 'is:' random(99999)
+   'line_after' loc '= (text)'
+   loc = loc + 1
+   end
+exit
+</em>
+
+Sample random numbers:

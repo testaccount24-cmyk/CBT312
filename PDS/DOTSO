@@ -1,0 +1,14 @@
+#!/bin/sh
+
+# this short shell script will allow the shell user to invoke
+# any TSO command that resides in a load library that is not
+# in the STEPLIB or Link List.
+#
+# Change the hlq.load.library to your load library and enjoy
+#
+# Copy into a directory in your PATH to use as a shell command
+# and then issue chmod +x xxxx (where xxxx is the name you gave
+# to this script).
+
+# Define STEPLIB and then Invoke 'tsocmd with passed command string'
+(export STEPLIB=hlq.load.library ; tsocmd "$@")

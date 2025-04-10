@@ -1,0 +1,33 @@
+)ATTR DEFAULT(%$_)
+   %   TYPE(TEXT)  INTENS(HIGH) SKIP(ON)
+   $   TYPE(TEXT)  INTENS(LOW)  SKIP(ON) COLOR(GREEN)
+   @   TYPE(TEXT)  INTENS(LOW)  SKIP(ON) COLOR(turq)
+   _   TYPE(INPUT) INTENS(HIGH) CAPS(ON) JUST(LEFT) HILITE(USCORE)
+)BODY EXPAND(\\)
+%Tutorial$-\-\-(%RUNC - Edit Macro$)-\-\-%Tutorial
+%Command ===>_ZCMD
+$
+%<EM>$and%</EM>>$Statements
+$
+%    <EM>
+$    edit macro statements in rexx
+%    </EM>
+$
+$ 1.%<EM>$and%</EM>$must be the only text on the statements
+$ 2. The RUNC offset is honored here so that the edit macro may be a comment
+$ 3. Select the%<EM>$statement to execute the inline macro
+$
+$ Command ===>@RUNC 3
+@    S00019  /* <em>
+@    000020   * /* rexx */
+@    000021   * address isredit
+@    000022   * 'macro'
+@    000023   * '(lines) = linenum .zlast';say 'Lines:' lines + 0
+@    000025   * exit
+@    000026   * </em> */
+$
+$ \ \ (press%ENTER$to continue) \ \
+)PROC
+  &ZUP     = #RUNC3A
+  &ZCONT   = #RUNC4
+)END

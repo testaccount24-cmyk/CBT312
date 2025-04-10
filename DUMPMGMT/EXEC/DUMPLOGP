@@ -1,0 +1,223 @@
+        /* ---------------------  rexx procedure  ------------------- *
+         * Name:      dumplogp                                        *
+         *                                                            *
+         * Function:  Post processor for dump copy started task.      *
+         *            Notifies selected users of dump.                *
+         *                                                            *
+         * Syntax:    %dumplogp dsn title                             *
+         *                                                            *
+         *            title is optional                               *
+         *                                                            *
+         * Author:    Lionel B. Dyck                                  *
+         *            Kaiser Permanente                               *
+         *            Walnut Creek, CA 94598                          *
+         *            (925) 926-5332                                  *
+         *            Internet: lionel.b.dyck@kp.org                  *
+         *                                                            *
+         * History:                                                   *
+         *            06/13/01 - package for sharing                  *
+         *            ..                                              *
+         *            05/08/96 - created                              *
+         *                                                            *
+         * ---------------------------------------------------------- */
+        arg parms
+
+        /* ------------------------------------- *
+         * parse input for dsn of copied dump    *
+         * ------------------------------------- */
+         parse value parms with . "'" dsn "'" title
+
+         work_dsn = translate(dsn," ",".")
+         jobname = word(work_dsn,3)
+
+         test_sys = "S10D RSYS"
+         dump_sys = word(work_dsn,2)
+         if wordpos(dump_sys,test_sys) > 0   then   return
+
+         /* ------------------------------------- *
+          * setup the dumplog variable            *
+          * ------------------------------------- */
+          system = mvsvar('sysname')
+          select
+             when substr(system,2,1) = 1 then  env = "SDEV"
+             when substr(system,2,1) = 2 then  env = "SPRD"
+             otherwise   env = "NCAL"
+             end
+          dumplog = "'SYSL."env".DUMPLOG'"
+          if env = "NCAL" then
+             dumplog = "'MVS.DUMPLOG'"
+
+        /* ------------------------------------- *
+         * say something in the systsprt log     *
+         * ------------------------------------- */
+        say "Processing dsn:" dsn "on" system
+
+        if length(title) > 0 then
+           say 'Title:         ' title
+        else call read_log
+
+        /* ------------------------------------- *
+         * all_ids receive every notification    *
+         * ------------------------------------- */
+        all_ids  = ""
+
+        /* ------------------------------------- *
+         * mss_ids receive notifications for all *
+         * that have send = 0                    *
+         * ------------------------------------- */
+        mss_ids  = "Sysprog1" ,
+                   "Lionel.B.Dyck"
+
+        /* ------------------------------------- *
+         * STG ids to be notified                *
+         * ------------------------------------- */
+        stg_ids = "STG.Sysprog",
+                  "STG.sysprog2"
+
+        /* ------------------------------------- *
+         * ICS ids to be notified                *
+         * ------------------------------------- */
+        ics_ids = "Network.sysprog" ,
+                  "network.sysprog2"
+
+        /* ------------------------------------- *
+         * oss_ids receive notification for      *
+         * all dumps with cics selection info.   *
+         * ------------------------------------- */
+        oss_ids = "sysprog.one" ,
+                  "cics.sysprog"
+
+        /* ------------------------------------- *
+         * alloc and write info to temp message  *
+         * data set for the information message. *
+         * ------------------------------------- */
+        msgdsn = "svcdump.r"random(99999)
+        msgdsn = "'MVS.MSG."msgdsn"'"
+        "Alloc f(msgdd) ds("msgdsn") new spa(1) tr lrecl(80) recfm(f)"
+        m.1 =   "   "
+        m.2 =  "Dump: " strip(dsn)
+        m.3 = "Title:" strip(title)
+        m.4 = "     "
+        m.5 = "This dump has been logged in" dumplog "and will be"
+        m.6 = "deleted in 5 days (CICS Test) or 30 days unless flagged"
+        m.7 = "for retention."
+        m.8 = "     "
+        m.9 = "If you do not want to retain this dump please delete its"
+        m.10 = "entry in" dumplog "and the dump will be deleted during"
+        m.11 = "the next daily dump clean up cycle."
+        m.12 = "     "
+        m.13 = "To access the system dumps enter TSO %DUMPINDX from the"
+        m.14 = "ISPF command line.  This will allow you to use, delete,"
+        m.15 = "or flag dump - i.e. full dump management including ",
+               "entry to IPCS."
+        m.16 = "     "
+        m.17 = "Note that this dump is logged in" dumplog "on" ,
+               "system" mvsvar('sysname')"."
+        "Execio * diskw msgdd (finis stem m."
+        "Free  f(msgdd)"
+
+        send = 0
+        send_ids = ""
+
+        /* ------------------------------------- *
+         * Send notice to oss_ids                *
+         * ------------------------------------- */
+        if pos("CICS",title) > 0 then send = 1
+        if pos("CCDR",title) > 0 then send = 1
+        if pos("DB2",title) > 0 then send = 1
+        if pos("DSN",title) > 0 then send = 1
+        if pos("IMS",title) > 0 then send = 1
+        if left(jobname,4) = "IDMS" then send = 1
+        if left(jobname,3) = "CIC" | pos("CIC",title) > 0 then send = 1
+        if pos("COMPUWARE",title) > 0 & left(jobname,3) = "AFX",
+            then send = 1
+        if send = 1 then do
+           send_ids = send_ids oss_ids
+           send = "x"
+           end
+
+        /* ------------------------------------- *
+         * Send notice to stg_ids                *
+         * ------------------------------------- */
+        if left(jobname,3) = "HSM"     then send = 1
+        if left(jobname,4) = "SLS0"    then send = 1
+        if left(jobname,4) = "HSC0"    then send = 1
+        if left(jobname,5) = "DFHSM"   then send = 1
+        if pos("SMS",title) > 0 then send = 1
+        if pos("SLS0",title) > 0 then send = 1
+        if send = 1 then do
+           send_ids = send_ids stg_ids
+           send = "x"
+           end
+
+        /* ------------------------------------- *
+         * Send notice to ics_ids                *
+         * ------------------------------------- */
+        if left(jobname,3) = "TPX"     then send = 1
+        if left(jobname,3) = "NET"     then send = 1
+        if left(jobname,3) = "TCP"     then send = 1
+        if left(jobname,3) = "FTP"     then send = 1
+        if left(jobname,4) = "KSRE"    then send = 1
+        if left(jobname,4) = "KSRF"    then send = 1
+        if pos("MQ",title)  > 0 & pos("CT/",title) = 0 then send = 1
+        if pos("VTAM",title) > 0 then send = 1
+        if pos("TCP",title) > 0 then send = 1
+        if pos("FTP",title) > 0 then send = 1
+        if jobname = 'ESCM' then send = 0
+        if send = 1 then do
+           send_ids = send_ids ics_ids
+           send = "x"
+           end
+
+        /* ------------------------------------- *
+         * send notice to mss_ids for all others *
+         * ------------------------------------- */
+        if send <> "x" then
+           call send_message mss_ids
+        else
+           call send_message send_ids
+
+        /* ------------------------------------- *
+         * Now delete the message dsn            *
+         * ------------------------------------- */
+         "Delete" msgdsn
+
+        exit
+
+        /* ------------------------------------- *
+         * Send notification message via smtp    *
+         * mail using the XMITIP exec.           *
+         * ------------------------------------- */
+        Send_Message:
+           arg ids
+           id = ""
+           do ic = 1 to words(ids)
+              id = id word(ids,ic)"@kp.org"
+              end
+           id = strip(id)
+
+           say ,
+           "%Xmitip ("id") msgds" msgdsn ,
+           "Subject 'DUMP:" system"-" title "'"
+
+           "%Xmitip ("id") msgds" msgdsn ,
+           "From dump.notify@noreply.kp.org" ,
+           "Subject 'DUMP:" system"-" title "'"
+            return
+
+        /* ------------------------------------- *
+         * read dumplog dsn and find the title   *
+         * for this dump                         *
+         * ------------------------------------- */
+        Read_Log:
+        "Alloc f(in) ds("dumplog") old"
+        "Execio * diskr in (finis stem in."
+        "Free  f(in)"
+
+        do i = 4 to in.0
+           parse value in.i with 12 indsn 56 title
+           if indsn <> dsn then iterate
+           leave
+           end
+
+        return

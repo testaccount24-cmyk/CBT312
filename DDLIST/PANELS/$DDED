@@ -1,0 +1,34 @@
+)Attr Default(%+_)
+/* % type(text  ) intens(high)              Defaults displayed for */
+/* + type(text  ) intens(low )                   information only  */
+/* _ type( input) intens(high) caps(on ) just(left )               */
+   ê type(text) intens(high) caps(off) just(asis ) color(yellow)
+   ! type(output) intens(low ) caps(off) just(asis ) color(white)
+   | type(text  ) intens(high) color(white)
+   ` type(text) intens(low ) caps(off) just(asis ) color(turq)
+)Body
+%Edit+--------------------% Data Set List for DDNAME +--------------------------
+%Command ===>_zcmd
+%
+`    The%DDED`ISPF Dialog provides a selection list of all data sets
+`    currently allocated to a requested DDNAME.  Optionally it will
+`    display a selection list for just those data sets that contain a
+`    specified member.
+`
+`    Note:  DDnames of LINKLIST and LPALIST are reserved and will be used
+`           to display and or search the LINK or LPA list of data sets.
+`
+`    Valid selection options are:
+`         %S`to Invoke ISPF Edit       (%E`is an alias for %S`)
+`         %B`to Invoke ISPF Browse
+`         %I`for Information on the data set
+`         %P`to Invoke the PDS Dialog
+`
+`    Or any valid TSO command may be entered that accepts the data set name
+`    as the first parameter.
+`
+`    Syntax:%DDEDêddname
+`        or:%DDEDêddname(member)
+)Init
+)Proc
+)End

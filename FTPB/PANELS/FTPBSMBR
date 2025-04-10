@@ -1,0 +1,27 @@
+)Attr
+ @ Type(input ) hilite(uscore) caps(on)
+ # Type(output) skip(on)
+ ` Type(output) skip(on) just(right)
+)Body Expand(\\)
++-\-\%FTPB Sync#ver  +\-\-
++Command ===>_zcmd   \ \+Scroll ===>_fscr+
++
++Local PDS  :#lpds
++Remote PDS :#rpds
++Remote Host:#thost                                          +Port:#thport
++
++Commands:%Locate string+%ONLY+only selected%CLEAR+clear selected
++Select Actions:%G+Get%P+Put%I+Ignore%D+Delete Remote%B+Browse Local%C+Compare
++               %R+Delete Local
++
+%S +Member    Action   Local Date  Time     Size  Remote Date Time     Size
+)Model
+@z+#fmem    +#fstate  #ldate      #ltime`lsize  +#rdate      #rtime`rsize  +
+)Init
+ &fscr = CSR
+ .zvars = '(fsel)'
+ .help = ftpbshm
+ &ver = &ftpbver
+)Proc
+ ver (&fsel,list,G,P,I,B,C,D,R)
+)End

@@ -1,0 +1,41 @@
+)Attr Default(%+_)
+/* + type(text  ) intens(low )                   information only  */
+   _ type( input) intens(high) caps(on) just(left )
+   ` type( input) intens(high) caps(off) just(left )
+   % type(text) intens(high)
+   $ type(output) intens(high) color(blue) hilite(reverse)
+   ~ type(text) intens(high) color(blue) hilite(reverse)
+)Body Expand(\\)
+%-\-\- CA-View Print Report %-\-\-
++Command Input%===>_zcmd
+
++Enter SYSOUT attributes below:
+
++Class       %===>_spc+     +(A through Z, 0 through 9)
++Copies      %===>_spcp+    +(1 to 255)
++Chars       %===>_schr+
++Forms       %===>_spfm+    **
++Destination %===>_spdest
++FCB         %===>_spfcb+
++UCS         %===>_spucs+
++Process Mode%===>_sppm    +**
++Pagedef     %===>_sppdef  +**
++Formdef     %===>_spfdef  +**
++
++Output Descriptor Name%===>_spodes  +(Omit with fields marked with **)
+)Init
+ .cursor = spc
+ .help = ISFJPOS
+)Proc
+ ver(&spc,nb,list,A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,
+     T,U,V,W,X,Y,Z,0,1,2,3,4,5,6,7,8,9)
+ ver (&spcp,range,1,255)
+ ver (&spdest,dsname)
+ ver (&sppm,list,LINE,PAGE)
+ ver (&spodes,dsname)
+ if  (&spodes NE &Z)
+     ver (&spfm,list,&Z)
+     ver (&sppm,list,&Z)
+     ver (&sppdef,list,&Z)
+     ver (&spfdef,list,&Z)
+)end

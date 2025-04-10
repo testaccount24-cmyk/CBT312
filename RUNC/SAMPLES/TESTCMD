@@ -1,0 +1,7 @@
+/* ------------------- REXX --------------------- *
+ * Sample command used to demonstrate the use of  *
+ * ALTLIB using RUNC - see member SAMPTSO for the *
+ * call for this command.                         *
+ * ---------------------------------------------- */
+ say 'testcmd: This command was invoked under RUNC after the'
+ say 'testcmd: ALTLIB command was executed with this dataset.'

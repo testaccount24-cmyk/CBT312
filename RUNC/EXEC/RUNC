@@ -1,0 +1,2161 @@
+/* --------------------  rexx procedure  -------------------- */
+ ver = 'V6.0 - Updated: 07/29/2020'
+/*
+ | Name:      RUNC                                            |
+ |                                                            |
+ | Function:  ISPF Edit Macro to Execute the TSO commands     |
+ |            and ISPF commands found in the edit data.       |
+ |                                                            |
+ |            Including support for EDIT, (E)JES, SDSF,       |
+ |            OMVS, and TSO Console commands (providing the   |
+ |            user has the necessary authority).              |
+ |                                                            |
+ |            With the ability to execute inline ISPF         |
+ |            Edit Macros (see the do_editmac below)          |
+ |                                                            |
+ | Syntax:    RUNC options                                    |
+ |                                                            |
+ | Options:   blank    use all defaults                       |
+ |            ?        display Tutorial                       |
+ |            HELP     display tutorial                       |
+ |            -A       Execute ALL commands found             |
+ |            -ALL     Execute ALL commands found             |
+ |            -B       Browse messages                        |
+ |            -BS      Bypass prompt for system symbolics     |
+ |                     toggle to over-ride default setting    |
+ |            -T       Messages go direct to terminal         |
+ |            -V       View messages                          |
+ |            -L       Log messages to a perm dataset         |
+ |                     - only valid if -B or -V used          |
+ |                     -LD      Log to sequential dataset     |
+ |                     -LP      Log to PDS member             |
+ |                     -LX      Do not log to dataset         |
+ |                              Over-rides user default       |
+ |            -C       Clean up RUNC Logs                     |
+ |            -I       Enable display of individual command   |
+ |                     results after each command if          |
+ |                     multiple commands are processed        |
+ |            -O       Display user default setting panel     |
+ |            -R       Report even if no generated messages   |
+ |                     - useful to see a audit report of      |
+ |                       selected commands                    |
+ |            -D(prefix) Messages inserted as data records    |
+ |                     Prefix optional. No symbolics.         |
+ |            -N       Messages inserted as notelines         |
+ |            -S nnn   Stop if return code exceeds nnn        |
+ |            -W nnn   Wrap messages for -D and -N at         |
+ |                     nnn characters. If nnn is W then       |
+ |                     nnn will be set to the Data Width      |
+ |                     Wrap will be at the closest blank or   |
+ |                     exact character.                       |
+ |            ONLY(xx) Select only commands with xx           |
+ |            PREFIX(xx) Prefix all commands with xx *        |
+ |            SUFFIX(xx) Suffix all commands with xx *        |
+ |                * - only applies to TSO commands            |
+ |                                                            |
+ | Command option order of precedence:                        |
+ |            -D and -N override -B -I -T -V and -L           |
+ |            -T override -D -I -N -L and -R                  |
+ |            -W only honored with -D and -N                  |
+ |                                                            |
+ | Usage:     use RUNC with/without options on command line   |
+ |            Select records using C or CC pairs              |
+ |                   or S and SS pairs if S makes more sense  |
+ |            Excluded records are ignored                    |
+ |                                                            |
+ | Dependencies: - STEMEDIT (CBT Tape file 895)               |
+ |               -  %runcputl exec used to write the messages |
+ |                  so that they can be captured using outtrap|
+ |               - Or EKKO (included with this package)       |
+ |                 **much more efficient than runcputl**      |
+ |                                                            |
+ | Customization:  Find *custom*                              |
+ |               - Change from using %runcputl to ekko        |
+ |               - Change logtype from D (dataset) to         |
+ |                 P (PDS member) or vice versa               |
+ |                                                            |
+ | Acknowledgement: Inspired by an e-mail from Bill Smith     |
+ |                                                            |
+ | Author:    Lionel B. Dyck                                  |
+ |                                                            |
+ | History:  (most recent on top)                             |
+ |        6.0 07/29/20 - Implement inline Edit Macro support  |
+ |        5.0 01/02/20 - Use ISFSLASH instead of ISFEXEC      |
+ |        4.9 01/11/19 - Change default behavior for BS to Y  |
+ |        4.8 12/26/18 - Add reporting on SET processing      |
+ |        4.7 12/22/18 - Add SET NOPROMPT/PROMPT options      |
+ |        4.6 12/21/18 - Add SET for symbolics                |
+ |        4.5 12/18/18 - Add elapsed time to report           |
+ |        4.4 12/17/18 - Add SLEEP command                    |
+ |        4.3 12/03/18 - Add RENAME command                   |
+ |        4.2 04/17/17 - Support EJES ST and SDSF ST          |
+ |        4.1 03/31/17 - Added display of results after       |
+ |                       command and add <doc> to log         |
+ |                     - Add <EXIT rc> to exit if the RC      |
+ |                       is equal or greater than             |
+ |                     - Add -I option                        |
+ |                     - Add <START> and <END> to define      |
+ |                       a range within the data to process   |
+ |                     - Fixed Cancel from Doc popup          |
+ |        4.0 03/22/17 - Add <DOC> option                     |
+ |                     - Support Parm on Edit Macro           |
+ |                     - Support Macro and Parm on Member Edit|
+ |        3.9 02/22/17 - Add -BS option to bypass prompting   |
+ |                       for supported symbolics              |
+ |                     - Improve header alignment             |
+ |        3.8 02/21/17 - Support Member on View/Edit/Browse   |
+ |        3.7 02/02/17 - Fixup header to be centered          |
+ |        3.6 01/31/17 - Clean up header for -s/-w            |
+ |        3.5 01/30/17 - Allow &&x to not process symbolic    |
+ |        3.4 01/28/17 - Add -L, -LD, -LP, -LX options        |
+ |                     - Add -C option                        |
+ |        3.3 01/12/17 - Add -D(prefix) support               |
+ |                       Leading and trailing blanks removed  |
+ |                     - allow -? and -help                   |
+ |                     - Add JDATE symbolic (same as JULIAN)  |
+ |        3.2 01/03/17 - Add &rdsn and &rmbr for active       |
+ |                       dataset and member                   |
+ |                     - Allow &rmem along with &rmbr         |
+ |        3.1 12/23/16 - Eliminate warning if no rows         |
+ |                       selected if -O only option           |
+ |                     - Support Browse and View commands     |
+ |                       e.g. Browse Dataset(xxx)             |
+ |        3.0 12/22/16 - Add -O option settings for user      |
+ |                       defaults                             |
+ |                     - clean up return codes for non-tso    |
+ |                     - support edit dataset for edit        |
+ |                     - a /* ends a command on a record      |
+ |                       and there is no requirement for a */ |
+ |                     - Remove site default for report       |
+ |                     - Insert header and command if -D/-N   |
+ |                     - Improve -W to break at a blank       |
+ |                       and allow -W value of W for data     |
+ |                       width                                |
+ |                     - For View/Browse use length of 80 or  |
+ |                       width of longest trapped message     |
+ |                     - Detect zero length messages for      |
+ |                       View/Browse in Stemedit (from omvs)  |
+ |                     - Improve parse for ONLY, PREFIX and   |
+ |                       SUFFIX to allow for a space after.   |
+ |                     - Update Header with actual command    |
+ |                       name in case RUNC is renamed or a    |
+ |                       test version is used.                |
+ |        2.7 12/12/16 - Remove LOADISPF routine and panels   |
+ |                     - Add new *custom* for Report default  |
+ |                     - Add new -R option to override the    |
+ |                       installation default                 |
+ |        2.6 12/09/16 - Add MaxRC to report                  |
+ |                     - minor code update in loadispf code   |
+ |        2.5 12/08/16 - Add EDIT command support             |
+ |                     - Sort symbolics for display           |
+ |                     - Bypass StemEdit if no real messages  |
+ |                     - Clean up symbolics after use         |
+ |        2.4 12/07/16 - Allow S/SS along with C/CC record    |
+ |                       selection                            |
+ |                     - Add -S nn for max return code to     |
+ |                       cause execution to stop if reached   |
+ |                     - Correction for when called outside   |
+ |                       of ISPF Edit                         |
+ |        2.3 12/05/16 - Add -W (wrap) option                 |
+ |                     - Add SYSID for 1 char system name     |
+ |                     - Add HHMM symbolic for hours minutes  |
+ |                     - Allow multiple uses of same symbolic |
+ |                     - On multiple commands on one line fix |
+ |                       return code msg for omvs             |
+ |        2.2 12/02/16 - Improve Tutorial with symbolic       |
+ |                       examples                             |
+ |                     - Only set symbolics once per use      |
+ |        2.1 12/01/16 - Change SDSF ISFCONS to userid        |
+ |                     - Support special symbolics - added    |
+ |                       DD         2 digit day               |
+ |                       MM         2 digit month             |
+ |                       YY         2 digit year              |
+ |                       YYYY       4 digit year              |
+ |        2.0 11/30/16 - Remember symbolcs for all uses       |
+ |                       of the current RUNC use              |
+ |                     - Change ISFCONS from SDSF to RUNC     |
+ |                     - Ignore eXcluded records              |
+ |                     - Allow EKKO in place of runcputl      |
+ |                     - Add CANCEL option on symbolics panel |
+ |                     - Add -A as alias of -ALL              |
+ |                     - Add time to return code msg line     |
+ |                     - Add -D to place the messages inline  |
+ |                       as Notelines                         |
+ |                     - Support multiple commands for ejes   |
+ |                     - Support multiple commands for sdsf   |
+ |                     - Add TSO Console command CONS         |
+ |                     - Support special symbolics.           |
+ |                       DATE       USA Date (mm/dd/yy)       |
+ |                       DOY        Day of year (e.g. 001)    |
+ |                       EDATE      European Date (dd/mm/yy)  |
+ |                       JDATE      Julian Date (e.g. 16001)  |
+ |                       JULIAN     Julian Date (e.g. 16001)  |
+ |                       LPAR       Active LPAR Name          |
+ |                       MONTH      Month (e.g. January)      |
+ |                       ODATE      Ordered Date (yy/mm/dd)   |
+ |                       PREFIX     Current TSO Prefix        |
+ |                       SDATE      Standard Date (yyyymmdd)  |
+ |                       SMFID      Active SMFID for the LPAR |
+ |                       SYSNAME    Active LPAR Name          |
+ |                       SYSPLEX    Active SYSPLEX Name       |
+ |                       SYSPREF    Current TSO Prefix        |
+ |                       SYSSMFID   Active SMFID for the LPAR |
+ |                       SYSUID     Current userid            |
+ |                       UDATE      USA Date (mm/dd/yy)       |
+ |                       USERID     Current userid            |
+ |                       USERIDL    Current userid lower case |
+ |                       WEEKDAY    Day of Week (e.g. Monday) |
+ |                     - Remove extraneous spaces on cont     |
+ |                       records                              |
+ |                     - Add version (2.0) to report          |
+ |                     - Add source library to report         |
+ |            11/23/16 - Tutorial Updates                     |
+ |                     - update ejes thx to E. Jaffe          |
+ |                     - enhance symbolic detection           |
+ |                     - Add -SIM option to simulate cmd      |
+ |            11/22/16 - Enhance OMVS support                 |
+ |                       syntax: omvs c1;c2;c3                |
+ |            11/21/16 - Support single quotes around variable|
+ |            11/16/16 - Enhance ejes commands                |
+ |                     - Fix -ALL to default to -V            |
+ |                     - Fix for multi-records commands if    |
+ |                       only the 1st record is selected      |
+ |            11/10/16 - Add test for trapped records         |
+ |            11/09/16 - Add Max RC message                   |
+ |            11/05/16 - Add command to the symbolic panel    |
+ |            11/03/16 - Check to verify under ISPF Edit      |
+ |                     - Correct bug with ONLY                |
+ |            11/02/16 - Change ALL to -ALL                   |
+ |                     - Correct message if no data trapped   |
+ |                     - Correct if PROFILE NOPREFIX          |
+ |            11/01/16 - Add ONLY, PREFIX, SUFFIX options     |
+ |            10/31/16 - ISPF Panel and Symbolics plus        |
+ |            10/28/16 - Creation                             |
+ |                                                            |
+ | ---------------------------------------------------------- |
+ | Copyright (c) 2016-2018 by Lionel B. Dyck                  |
+ | ---------------------------------------------------------- |
+ | Support is on a best effort and time available basis which |
+ | is why the complete source is provided for this application|
+ | so you can find and fix any issues you find. Please let    |
+ | me know if you do make changes/enhancements/fixes.         |
+ | ---------------------------------------------------------- |
+ | License:   This EXEC and related components are released   |
+ |            under terms of the GPLV3 License. Please        |
+ |            refer to the LICENSE file for more information. |
+ |            Or for the latest license text go to:           |
+ |                                                            |
+ |              http://www.gnu.org/licenses/                  |
+ * ---------------------------------------------------------- */
+
+ Address ISREdit
+ 'Macro (runcopt) NOPROCESS'
+
+/* ------------------------------------------- *
+ | Capture the Starting Service Units and Time |
+ * ------------------------------------------- */
+ s_service = sysvar('SYSSRV')
+ s_time    = sysvar('SYSCPU')
+
+/* ------------------------------------ *
+ | Check to see if under ISPF Edit/View |
+ | and if not then exit with rc 8       |
+ | Then setup error environment         |
+ * ------------------------------------ */
+
+ Address ISPExec
+ if rc /= 0 then do
+    zedsmsg = 'Error'
+    zedlmsg = 'RUNC invoked outside of ISPF Edit or View.'
+    'setmsg msg(isrz001)'
+    exit 8
+    end
+ 'Control Errors Return'
+ Address ISREdit
+
+/* ------------------- *
+ | Define our defaults |
+ * ------------------- */
+ parse value '' with null cmd only cprefix csuffix wrap stoprc ,
+                     crbo crto crvo crdo crno crro crso crwo ,
+                     cmd1st logdsn crlo crbs crio
+ skip     = 0
+ maxrc    = 0
+ erc      = 0
+ count    = 0
+ dhit     = 0
+ nhit     = 0
+ bvhit    = 0
+ x01      = '01'x
+ svstart  = 1
+ symbols. = null
+ setsyms  = null
+ special  = "'<>(),.; $#&Ý¨{}/\%-_" '"'
+ call set_symbols
+
+/* ------------------------------------------------------------- *
+ | *custom*                                                      |
+ |                                                               |
+ | If EKKO is installed then uncomment the rputl assignment      |
+ | statement:  rputl = 'ekko'                                    |
+ | And then comment the rputl assignment statement for %runcputl |
+ |                                                               |
+ | logtype = 'D' for individual datasets                         |
+ |         = 'P' for members of a PDS (one PDS per day)          |
+ |                                                               |
+ | May be over-ridden by user using -LD or -LP                   |
+ * ------------------------------------------------------------- */
+/* rputl = 'ekko' */
+ rputl = '%runcputl'
+
+ logtype = 'D'    /* individual dataset */
+
+/* ------------------------------------------------------------ *
+ | Check for processing options                                 |
+ |                                                              |
+ | 1. HELP to display a short help text (also ?)                |
+ | 2. Check for Skip option - must be first and must be numeric |
+ | 3. Check for -A to process all records                       |
+ | 4. Check for -ALL to process all records                     |
+ | 5. Check for -B to browse the results                        |
+ | 6. Check for -D to insert messages as data                   |
+ | 7. Check for -N to insert messages as notelines              |
+ | 8. Check for -T to skip outtrap                              |
+ | 9. Check for -V to view the results                          |
+ |10. Check for -SIM to simulate processing                     |
+ |11. Check for -W nnn to wrap -D/-N text                       |
+ |12. Check for -S nnn for max return code to stop at           |
+ |13. Check for -R to toggle the Report option on or off        |
+ |    depending on the default set above                        |
+ |14. Check for -O to display user default settings panel       |
+ |15. Check for -L to log messages to a permanent dataset       |
+ |              -LD sequential or -LP pds member                |
+ |              -LX to over-ride the user defaults from -O      |
+ |16. Check for -C to display all RUNC log datasets             |
+ |17. Check for -BS to bypass prompt for supported symbolics    |
+ |18. Check for -I to enable individual command result display  |
+ |                                                              |
+ | Notes:                                                       |
+ |    1. All options will be translated to upper case which is  |
+ |       what you'd expect from ISPF 6 or native TSO            |
+ * ------------------------------------------------------------ */
+ options = translate(runcopt)
+ if abbrev("HELP",options,1) = 1 then call help
+ if options = '?'    then call help
+ if options = '-?' then call help
+ if options = '-C' then call display_logs
+ if options = '-HELP' then call help
+ options = translate(strip(options))
+ if datatype(word(options,1)) = 'NUM' then do
+    skip = word(options,1) + 1
+    options = subword(options,2)
+    end
+ if wordpos('-S',options) > 0 then do
+    wp = wordpos('-S',options)
+    stoprc = subword(options,wp+1,1)
+    options = delword(options,wp,2)
+    end
+ if stoprc /= null then do
+    crso = stoprc
+    end
+    else crso = null
+ if wordpos('-W',options) > 0 then do
+    wp = wordpos('-W',options)
+    wrap = subword(options,wp+1,1)
+    if wrap = 'W' then
+       '(wrap) = data_width'
+    options = delword(options,wp,2)
+    end
+ if wrap /= null then do
+    crwo = wrap
+    end
+    else crwo = null
+ if wordpos('-SIM',options) = 0
+    then sim = 0
+    else sim = 1
+ all = 0
+ if wordpos('-A',options)   > 0 then all = 1
+ if wordpos('-AL',options)  > 0 then all = 1
+ if wordpos('-ALL',options) > 0 then all = 1
+ if wordpos('-B',options)   > 0 then crbo = 'Y'
+ if wordpos('-I',options)   > 0 then crio = 'Y'
+ if wordpos('-BS',options)  > 0 then bypass_rs = 1
+ if wordpos('-D',options)   > 0 then crdo = 'Y'
+ if pos('-D(',options)      > 0 then do
+    parse value options with . '-D('crdo')'
+    crdo = strip(crdo)
+    end
+ if crdo /= 'Y' then
+    if wordpos('-N',options) > 0 then crno = 'Y'
+ if wordpos('-R',options)    > 0 then crro = 'Y'
+ if wordpos('-T',options)    > 0 then crto = 'Y'
+ if wordpos('-V',options)    > 0 then crvo = 'Y'
+ if wordpos('-L',options)    > 0 then do
+    crlo = 'Y'
+    end
+ if wordpos('-LD',options)    > 0 then do
+    crlo = 'D'
+    end
+ if wordpos('-LP',options)    > 0 then do
+    crlo = 'P'
+    end
+ if wordpos('-LX',options) > 0 then do
+    crlo = 'N'
+    end
+
+ call Check_Defaults
+ if wordpos('-O',options) > 0 then call Set_Defaults
+ if bvhit = 1 then do
+    call outtrap 'trap.'
+    if pos(crlo,'DP') > 0 then do
+       ldd = 'RC'random(99)'DD'random(99)
+       timex = time()
+       timex = substr(timex,1,2)''substr(timex,4,2)''substr(timex,7,2)
+       if crlo = 'D' then do
+          ldsn = 'RUNC.D'yy''mm''dd'.T'timex'.LOG'
+          end
+       else do
+          ldsn = 'RUNC.D'yy''mm''dd'.LOG'
+          end
+       if sysvar('syspref') = null
+          then logdsn = sysvar('sysuid')'.'ldsn
+          else logdsn = sysvar('syspref')'.'ldsn
+       end
+    end
+
+/* ------------------------------------------------------- *
+ | Check for other options:                                |
+ |                                                         |
+ | ONLY(xxx) to limit the commands to select/process       |
+ | PREFIX(string) to append the string to the front of all |
+ |     selected commands                                   |
+ | SUFFIX(string) to append the string to the end of all   |
+ |     selected commands                                   |
+ |                                                         |
+ | Note: Prefix/Suffix do NOT apply to ISPF commands       |
+ * ------------------------------------------------------- */
+ if pos('ONLY',options) > 0 then
+    parse value options with . 'ONLY' '('only')' .
+ if pos('PREFIX',options) > 0 then
+    parse value options with . 'PREFIX' '('cprefix')' .
+ if pos('SUFFIX',options) > 0 then
+    parse value options with . 'SUFFIX' '('csuffix')' .
+ only    = strip(only)
+ cprefix = strip(cprefix)
+ csuffix = strip(csuffix)
+
+/* ------------------------------------------------------- *
+ | Get the range of records to process as                  |
+ | TSO commands.                                           |
+ |                                                         |
+ | The range is specified using the C, C# or CC line tags. |
+ |                                                         |
+ | If no range is specified then if ALL wasn't specified   |
+ | then issue a message and exit that a range is required. |
+ * ------------------------------------------------------- */
+ 'Process Range C S'
+ if rc > 0 then
+    if all = 0 then do
+       zedsmsg = 'Invalid Range'
+       zedlmsg = 'No range specified on the command.' ,
+                 'Use C or CC/CC, or S or SS/SS for a range,' ,
+                 'or use -A (or -ALL) on the command.'
+       if wordpos('-O',options) = 0 then
+       Address ISPExec ,
+              'Setmsg msg(isrz001)'
+       exit
+       end
+ "(start) = linenum .zfrange"
+ "(stop) = linenum .zlrange"
+
+/* ---------------------- *
+ | Generate Report Header |
+ * ---------------------- */
+   parse source x
+   command = word(x,3)
+   if member /= null then hdsn = rdsnv'('rmbrv')'
+   head.1 =  center('RUNC Command Processor version:' ver,70)
+   head.2 =  center(date('w') date('m') ,
+     left(date('n'),2)', 'right(date('n'),4) 'at' time('c'),70)
+   head.3 =  center('Command dataset:' hdsn,70)
+   head.4 =
+   if crso = null then crso = 0
+   if crwo = null then crwo = 0
+   head.5 =  'RUNC Command:' translate(command runcopt)
+   if crbo = 'Y' then rrbo = 'Yes'
+                 else rrbo = 'No'
+   if crto = 'Y' then rrto = 'Yes'
+                 else rrto = 'No'
+   if crvo = 'Y' then rrvo = 'Yes'
+                 else rrvo = 'No'
+   if crdo = null then rrdo = 'No'
+                 else rrdo = crdo
+   if rrdo = 'N' then rrdo = 'No'
+   if crno = 'Y' then rrno = 'Yes'
+                 else rrno = 'No'
+   if crro = 'Y' then rrro = 'Yes'
+                 else rrro = 'No'
+   if crbs = 'Y' then rrbs = 'Yes'
+                 else rrbs = 'No'
+   if crio = 'Y' then rrio = 'Yes'
+                 else rrio = 'No'
+   if pos(crlo,'DP') = 0 then rrlo = 'No'
+      else rrlo = crlo
+   head.6 =  'RUNC Options: -B:' left(rrbo,3) '-T:' left(rrto,3) ,
+                           '-V: ' left(rrvo,3) ,
+                           '-R:' left(rrro,3) '-L:' rrlo
+   head.7 =  '              -D:' left(rrdo,3) '-N:' left(rrno,3) ,
+                            '-BS:' left(rrbs,3) '-I:' left(rrio,3) ,
+                            '-S:' left(stoprc,3) '-W:' left(wrap,3)
+   if crso = 0 then crso = null
+   if crwo = 0 then crwo = null
+   head.8 = '  '
+   head.0 = 8
+   if trapopt = 'T' then puthead = 1
+                    else puthead = 0
+  if bvhit = 1 then puthead = 1
+  if puthead = 1 then do
+      Address TSO
+      do hi = 1 to head.0
+         rputl "'"head.hi"'"
+         end
+      Address ISREdit
+   end
+  if (dhit + nhit) > 0 then
+      do hi = 1 to head.0
+         "line_before" start " = msgline '"head.hi"'"
+      end
+
+/* ------------------------------ *
+ | Update wrap based on -D Prefix |
+ * ------------------------------ */
+ if crdo /= 'Y' then
+    if wrap /= null then do
+    wrap = wrap - (length(crdo) -1)
+    end
+
+/* --------------------------------------------------- *
+ | Process the selected records:                       |
+ |                                                     |
+ | 1. Blank records are ignored                        |
+ | 2. Ignore specific record types (see below)         |
+ | 3. Records ending with + have a continuation on     |
+ |    the next record                                  |
+ | 4. All other records are assumed to be commands     |
+ | 5. Excluded records are ignored                     |
+ * --------------------------------------------------- */
+ l = start - 1
+ cmdline = 0
+ do until l = stop
+    l = l + 1
+    '(lstatus) = xstatus' l
+    if lstatus = 'X' then iterate
+    '(data) = line' l
+    if skip > 0 then do
+       data = substr(data,skip)
+       end
+    if left(data,1) = '*' then iterate
+    if left(data,2) = '/*' then iterate
+    if left(data,2) = '//' then iterate
+    if left(data,3) = '//*' then iterate
+    if pos('/*',data) > 0 then
+       parse value data with data '/*' .
+    data = strip(data)
+    if data = null then iterate
+    if cmdline = 0 then cmdline = l
+    if right(data,1) = '+' then do
+       cmd = cmd strip(left(data,length(data)-1))
+       if l = stop then stop = stop + 1
+       iterate
+       end
+    else cmd = cmd data
+
+   /* ----------------------------------- *
+    | If the command is null then iterate |
+    * ----------------------------------- */
+    if strip(cmd) = null then iterate
+
+   /* ----------------------------------- *
+    | Process special control statements: |
+    |                                     |
+    | <DOC><TITLE></DOC>                  |
+    | <EXIT rc>                           |
+    | <START><END>                        |
+    * ----------------------------------- */
+    if left(word(cmd,1),1) = '<' then do
+       tcmd = cmd
+       cmd = null
+       if translate(word(tcmd,1)) = '<EM>' then
+          call do_editmac
+       if pos('DOC>',translate(tcmd)) > 0 then
+          call do_doc
+       if pos('<EXIT',translate(tcmd)) > 0 then
+          call do_exit
+       if pos('<END',translate(tcmd)) > 0 then leave
+       if pos('<START',translate(tcmd)) > 0 then do
+          "Find '<END>'"
+          if rc > 0 then do
+             address TSO
+                rputl 'Find for <END> not successful.'
+                rputl ' '
+             stop = l
+             iterate
+             end
+          '(stop) = cursor'
+          end
+       iterate
+       end
+
+   /* ------------------------- *
+    | Check for an ISPF Command |
+    * ------------------------- */
+    if word(translate(cmd),1) = 'SELECT'
+       then ispf = 1
+       else ispf = 0
+
+   /* ---------------------------------- *
+    | Check for ONLY, PREFIX, SUFFIX and |
+    | process accordingly.               |
+    * ---------------------------------- */
+    if only /= null then
+       if pos(only,translate(cmd)) = 0 then do
+          cmd = null
+          iterate
+          end
+   /* ----------------------------------------- *
+    | Make sure PREFIX and SUFFIX are only used |
+    | for TSO commands.                         |
+    * ----------------------------------------- */
+    if wordpos(translate(word(cmd,1)), ,
+        'CONS BROWSE EDIT EJES OMVS SDSF SELECT VIEW') = 0
+    then do
+       if cprefix /= null then
+          cmd = cprefix cmd
+       if csuffix /= null then
+          cmd = cmd csuffix
+       end
+
+   /* ---------------------------------------------- *
+    | If a symbolic (&) is found in the command then |
+    | call the routine to generate an ISPF panel to  |
+    | have the symbolics filled in.                  |
+    * ---------------------------------------------- */
+    cancel = 0
+    if pos('&',cmd) > 0 then call fix_cmd
+    if pos(x01,cmd) > 0 then
+       cmd = translate(cmd,'&',x01)
+    if cancel = 1 then do
+      Address TSO
+      rputl
+      rputl 'Command cancelled:' cmd
+      Address ISREdit
+      end
+
+   /* ----------------------------- *
+    | Check for simulate processing |
+    * ----------------------------- */
+    if sim = 1 then
+    if puthead = 1 then do
+       Address TSO
+       rputl 'Command:' cmd
+       rputl
+       Address ISREDIT
+       end
+    if (dhit + nhit) > 0 then do
+       cmdl = 'Command:' cmd
+       if cmd1st = 1 then
+          "line_before" cmdline " = msgline '" "'"
+       "line_before" cmdline " = msgline '"cmdl"'"
+       "line_before" cmdline " = msgline '" "'"
+       cmdline = 0
+       cmd1st = 1
+       end
+
+   if cancel = 0 then
+   if sim = 0 then do
+   /* ----------------------------------------------------- *
+    | If doing an outtrap then log the command being issued |
+    | so that it will be trap'd.                            |
+    * ----------------------------------------------------- */
+    if bvhit = 1 then do
+       Address TSO
+       rputl 'Command:' cmd
+       rputl
+       Address ISREDIT
+       end
+
+   /* -------------------------- *
+    | Check for -D or -N options |
+    * -------------------------- */
+    if (dhit + nhit) > 0
+       then call outtrap 'd.'
+
+   /* ------------------------------------------------------------ *
+    | If the command starts with SELECT then it is an ISPF command |
+    | so invoke it as such.                                        |
+    |                                                              |
+    | Special processing for selected commands.                    |
+    |                                                              |
+    | Otherwise it is a TSO or ISPF Command                        |
+    * ------------------------------------------------------------ */
+    Select
+       When translate(left(cmd,5)) = 'CONS ' then do
+            call do_cons
+            hit = 1
+            end
+       When translate(left(cmd,7)) = 'BROWSE ' then do
+            call do_browse
+            hit = 1
+            end
+       When translate(left(cmd,5)) = 'VIEW ' then do
+            call do_edit
+            hit = 1
+            end
+       When translate(left(cmd,5)) = 'EDIT ' then do
+            call do_edit
+            hit = 1
+            end
+       When translate(left(cmd,5)) = 'EJES ' then do
+            call do_ejes
+            hit = 1
+            end
+       When translate(left(cmd,7)) = 'RENAME ' then do
+            call do_rename
+            hit = 1
+            end
+       When translate(left(cmd,6)) = 'SLEEP ' then do
+            call do_sleep
+            hit = 1
+            end
+       When translate(left(cmd,5)) = 'SDSF ' then do
+            call do_sdsf
+            hit = 1
+            end
+       When translate(left(cmd,5)) = 'OMVS ' then do
+            parse value cmd with . cmd
+            call do_omvs
+            hit = 1
+            end
+       When translate(left(cmd,4)) = 'SET ' then do
+            parse value cmd with . uvar'='uval
+            if strip(uval) = null then do
+               if translate(uvar) = 'PROMPT'   then crbs = 'N'
+               if translate(uvar) = 'NOPROMPT' then crbs = 'Y'
+               address tso rputl 'Set processed:' uvar
+               end
+            else do
+                 setsyms = setsyms translate(strip(uvar)) strip(uval) x01
+                 address tso ,
+                    rputl 'Set processed:' strip(uvar) 'as' strip(uval)
+                 end
+            hit = 1
+            end
+       Otherwise hit = 0
+       end
+    if hit = 0 then do
+    if ispf = 1
+        then Address ISPExec cmd
+        else Address TSO cmd
+        end
+    if maxrc < rc then maxrc = rc
+    erc = rc
+    cmd = null
+    count = count + 1
+
+    data = 'Return code for command is:'  erc 'at' time('c')
+    "line_after" l " = msgline '"data"'"
+
+   /* ------------------------------------------------- *
+    | If using outtrap then log the return code message |
+    * ------------------------------------------------- */
+    if bvhit = 1 then do
+       Address TSO
+       rputl
+       rputl data
+       rputl
+       e_service = sysvar('SYSSRV')
+       e_time    = sysvar('SYSCPU')
+       total_service = e_service - s_service
+       total_time    = e_time    - s_time
+       rputl 'Processing Time(seconds):' total_time ,
+             'Service Units:' total_service
+       rputl
+       Address ISREDIT
+       end
+
+ if left(rio,1) = 'Y' then
+ if l < stop then
+ if dhit = 0 then do
+     trapl = 80
+     do i = 1 to trap.0
+        if length(trap.i) > trapl
+           then trapl = length(trap.i)
+        if length(trap.i) = 0 then trap.i = ' '
+        end
+    call msg_rc 'RC:'
+    if trapopt = 'V'
+       then call stemedit 'view',trap.,svstart,,'RUNC Results',,trapl
+       else call stemedit 'browse',trap.,svstart,,'RUNC Results',,trapl
+    svstart = trap.0
+    end
+
+/* -------------------------------------------------------- *
+ | Check for -D to insert the command messages into         |
+ | the data as data records.                                |
+ |                                                          |
+ | If -W (wrap) is requested the wrap will be at either the |
+ | closest blank or at the exact character depending on the |
+ | data string.                                             |
+ * -------------------------------------------------------- */
+    if dhit = 1 then do
+       call outtrap 'off'
+       do dc = 1 to d.0
+          data = d.dc
+          if wrap = null then do
+             if crdo /= 'Y' then
+                data = crdo' 'data
+             "line_after" l " = dataline '"data"'"
+             stop = stop + 1
+             l    = l + 1
+             end
+          else do until strip(data) = null
+                lb = lastpos(' ',data,wrap)
+                if lb > 0 then do
+                   wdata = left(data,lb)
+                   data = substr(data,lb+1)
+                   end
+                else do
+                     wdata = left(data,wrap)
+                     data  = substr(data,wrap+1)
+                     end
+                if crdo /= 'Y'
+                   then "line_after" l " = dataline '"crdo' 'wdata"'"
+                   else "line_after" l " = dataline '"wdata"'"
+                stop = stop + 1
+                l    = l + 1
+               end
+          end
+       drop d.
+       end
+
+/* -------------------------------------------------------- *
+ | Check for -N to insert the command messages into         |
+ | the data as notelines.                                   |
+ |                                                          |
+ | If -W (wrap) is requested the wrap will be at either the |
+ | closest blank or at the exact character depending on the |
+ | data string.                                             |
+ * -------------------------------------------------------- */
+    if nhit = 1 then do
+       call outtrap 'off'
+       do dc = d.0 to 1 by -1
+          data = d.dc
+          if wrap = null then
+             "line_after" l " = noteline '"data"'"
+          else do until data = null
+                lb = lastpos(' ',data,wrap)
+                if lb > 0 then do
+                   wdata = left(data,lb)
+                   data = substr(data,lb+1)
+                   end
+                else do
+                     wdata = left(data,wrap)
+                     data  = substr(data,wrap+1)
+                     end
+               "line_before" l+1 " = noteline '"wdata"'"
+               end
+          end
+       drop d.
+       end
+
+   /* -------------------------------------------------- *
+    | End of the loop processing all the specified range |
+    * -------------------------------------------------- */
+    end
+    cmd = null
+   /* ---------------------------------------------- *
+    | If the Stop if return code greater than is set |
+    | then test and exit if found.                   |
+    * ---------------------------------------------- */
+    if stoprc /= null then
+       if maxrc > stoprc then do
+       Address TSO,
+       rputl 'Return code' maxrc ,
+             'greater than' stoprc 'encountered' ,
+             'causing execution to end.'
+       l = stop
+       leave
+       end
+    end
+
+ call msg_rc 'MaxRC:'
+
+/* ------------------------- *
+ | Issue final MAXRC Message |
+ * ------------------------- */
+ if bvhit = 1 then do
+    Address TSO
+    rputl 'Maximum return code for' count 'command(s):' maxrc
+    rputl
+    Address ISREDIT
+    end
+
+/* ---------------------------------------------- *
+ | if non-blank options then use STEMEDIT to view |
+ | the results of the TSO commands                |
+ * ---------------------------------------------- */
+ if bvhit = 1 then do
+     call outtrap 'off'
+
+ /* -------------------------------- *
+  | Check for any meaningful results |
+  * -------------------------------- */
+  if (dhit + nhit) = 0 then
+  if rro = 'N' then do
+  hit = 0
+  if trap.0 > 0 then
+     do i = 4 to trap.0
+     Select
+       When strip(trap.i) = '' then nop
+       When left(trap.i,8)  = 'Command:' then nop
+       When left(trap.i,6)  = 'RUNC C' then nop
+       When left(trap.i,6)  = 'RUNC O' then nop
+       When left(trap.i,19) = 'Command cancelled:' then nop
+       When left(trap.i,11) = 'Return code' then nop
+       When left(trap.i,19) = 'Output of command:' then nop
+       When left(trap.i,21) = 'Changed to SuperUser:' then nop
+       When left(trap.i,24) = 'Error output of command' then nop
+       When left(trap.i,17) = 'Changed back from' then nop
+       When left(trap.i,19) = 'Maximum return code' then nop
+       Otherwise hit = 1
+       end
+     end
+     if hit = 0 then exit
+     end
+
+/* -------------------------------------------------- *
+ | View or Browse the results of the trapped messages |
+ |                                                    |
+ | - Get the max length of the trapped messages       |
+ | - Verify there are no zero length messages         |
+ |   - possible coming from omvs                      |
+ |                                                    |
+ | If the -L (Log) option then create a permanent     |
+ | dataset for the messages and then Browse or View   |
+ | the dataset.                                       |
+ * -------------------------------------------------- */
+  if trap.0 > 0 then do
+     trapl = 80
+     do i = 1 to trap.0
+        if length(trap.i) > trapl
+           then trapl = length(trap.i)
+        if length(trap.i) = 0 then trap.i = ' '
+        end
+     if bvhit = 1 then do
+        if logdsn /= null then do
+          /* ------------------------------------------------------------- *
+           | Allocate the log dataset.                                     |
+           |                                                               |
+           | Sequential dataset allocations based on the largest record    |
+           | length found and the number of records for both size and DCB. |
+           |                                                               |
+           | PDS dataset allocations are always RECFM=VB LRECL=255 with    |
+           | a primary of 30 and a secondary of 150 and 52 directory blks  |
+           * ------------------------------------------------------------- */
+           Address TSO
+           if crlo = 'D' then do
+              prim = (trapl*trap.0)%32000 +15
+              "Alloc f("ldd") ds('"logdsn"') new space("prim","prim")" ,
+                 "recfm(v b) lrecl("trapl+4") blksize(0) release"
+              end
+           else do
+              if sysdsn("'"logdsn"'") /= 'OK' then do
+                 "Alloc f("ldd") ds('"logdsn"') new space(30,150)" ,
+                     'recfm(v b) lrecl(255) blksize(0) dsorg(po)' ,
+                     'dir(52)'
+                 'Free f('ldd')'
+                 end
+                 mem = 'L'timex
+                 logdsn = logdsn'('mem')'
+                 "Alloc f("ldd") ds('"logdsn"') shr"
+              end
+           'Execio * diskw' ldd '(finis stem trap.'
+           'Free  f('ldd')'
+           Address ISREdit
+           if trapopt = 'V'
+              then Address ISPExec "View  Dataset('"logdsn"')"
+              else Address ISPExec "Browse  Dataset('"logdsn"')"
+           end
+        else do
+             if trapopt = 'V'
+                then call stemedit 'view',trap.,,,'RUNC Results',,trapl
+                else call stemedit 'browse',trap.,,,'RUNC Results',,trapl
+             end
+           end
+        end
+  else do
+       zedsmsg = 'No data captured'
+       zedlmsg = 'The command(s) did not generate any data' ,
+                 'that was able to be captured to view/edit.'
+      Address ISPExec 'Setmsg msg(isrz001)'
+      end
+  end
+
+ Exit
+
+/* ---------------------- *
+ | Issue SETMSG for MAXRC |
+ * ---------------------- */
+ Msg_RC:
+ parse arg rcmsg
+ zedsmsg = rcmsg maxrc
+ zedlmsg = count 'command(s) executed with a return' ,
+           'code of:' maxrc
+ Address ISPExec 'Setmsg Msg(isrz001)'
+ return
+
+/* -------------- *
+ | Sort Symbolics |
+ * -------------- */
+ sort_symbolics: procedure expose symbolics
+  do i = 1 to words(symbolics)
+     sstem.i = word(symbolics,i)
+     end
+  sstem.0 = words(symbolics)
+
+   /* Ken Singer, Shell Oil, Houston */
+   if sstem.0 = 1 then return /* simple sort !*/
+   ctr =  sstem.0
+   do y = 1 to  ctr - 1
+      do x = y+1 to ctr
+         if sstem.x < sstem.y then do
+             /* swap these 2 entries */
+             t1 = sstem.y ;
+             sstem.y = sstem.x
+             sstem.x = t1
+         end
+      end x
+   end y
+
+ symbolics = ''
+ do i = 1 to sstem.0
+    symbolics = symbolics sstem.i
+    end
+
+ return
+
+/* ------------------------------------------------- *
+ | Process the (E)JES commands to capture the output |
+ * ------------------------------------------------- */
+ do_ejes:
+ parse value cmd with x cmd
+ Address TSO
+ if left(translate(cmd),2) = 'ST' then do
+    'ejes' cmd
+    return
+    end
+ cc = 1
+ ejes.cc = 'crdelay 10' /* set 10 second max time out */
+ cc = cc + 1
+ if pos(';',cmd) = 0
+    then do
+         ejes.cc = '/'cmd
+         cc = cc + 1
+         end
+    else do until strip(cmd) = ''
+         parse value cmd with ejcmd';'cmd
+         ejes.cc = '/'ejcmd
+         cc = cc + 1
+         end
+ ejes.cc = ''
+ ejes.0 = cc
+ erc = ejesrexx("execapi * (STEM EJES TERM")
+ if erc > maxrc then maxrc = erc
+ do i = 1 to ejes_ulog.0
+    rputl ejes_ulog.i
+    end
+ rc = erc
+ return
+
+/* -------------------------------------------------------- *
+ | Process the Browse or View row selection                 |
+ | - requires a DATASET                                     |
+ * -------------------------------------------------------- */
+ do_browse:
+ parse value cmd with bvsel cmd
+ bvsel = translate(bvsel)
+ do until cmd = null
+    parse value cmd with xcmd';'cmd
+    cmd  = strip(cmd)
+    xcmd = strip(xcmd)
+    if translate(left(xcmd,7)) = 'MEMBER(' then do
+       parse value translate(xcmd) with 'MEMBER('member')'
+       xcmd = "dataset('"rdsn"("member")') volume("rvolser")"
+       end
+    if translate(left(xcmd,7)) /= 'DATASET'
+       then do
+            Address TSO ,
+            rputl bvsel 'Requires a DATASET parameter'
+            rc = 8
+            end
+       else Address ispexec bvsel xcmd
+       erc = rc
+       if erc > 0 then do
+            Address TSO
+            rputl zerrsm
+            rputl zerrlm
+            Address ISREdit
+            end
+       if erc > maxrc then maxrc = erc
+    end
+    rc = erc
+  return
+
+/* -------------------------------------------------------- *
+ | Process the Edit command                                 |
+ | - if the command begins with DATASET then invoke as      |
+ |   address ispexec edit instead of as edit command        |
+ * -------------------------------------------------------- */
+ do_edit:
+ parse value cmd with editview cmd
+ do until cmd = null
+    parse value cmd with xcmd';'cmd
+    cmd  = strip(cmd)
+    xcmd = strip(xcmd)
+    if translate(left(xcmd,7)) = 'MEMBER(' then do
+       parse value translate(xcmd) with 'MEMBER('member')' rest
+       xcmd = "dataset('"rdsn"("member")') volume("rvolser")" rest
+       end
+    if pos('MACRO(',translate(xcmd)) > 0 then
+       if pos('PARM(',translate(xcmd)) > 0 then do
+          parse value translate(xcmd) with 'PARM('parm')'
+          lp = pos('PARM(',translate(xcmd))
+          lxcmd = left(xcmd,lp-1)
+          rxcmd = substr(xcmd,lp+5)
+          rp = pos(')',rxcmd)
+          rxcmd = substr(rxcmd,rp+1)
+          xcmd = lxcmd 'PARM(parm)' rxcmd
+          Address ISPExec 'Vput (parm)'
+       end
+    if translate(left(xcmd,7)) /= 'DATASET'
+       then xcmd
+       else Address ispexec editview xcmd
+       erc = rc
+       if erc > maxrc then maxrc = erc
+       if erc > 4 then do
+          Address TSO
+          rputl zerrsm
+          rputl zerrlm
+          Address ISREdit
+          end
+    end
+    rc = erc
+  return
+
+/* ------------------------------------------------- *
+ | Process the SDSF commands to capture the output   |
+ * ------------------------------------------------- */
+ do_sdsf:
+  parse value cmd with x xcmd
+ if left(translate(xcmd),2) = 'ST' then do
+    Address ISPExec ,
+   'Select Pgm(ISFISP) NEWAPPL(ISF) SCRNAME(SDSF) Parm('xcmd')'
+    return
+    end
+  isfcons = sysvar('sysuid')
+  rc = isfcalls('on')
+  do until xcmd = ''
+     parse value xcmd with cmd';'xcmd
+     Address SDSF "ISFSLASH '"cmd"' (WAIT)"
+     erc = rc
+     if erc > maxrc then maxrc = erc
+     Address TSO
+     do i = 1 to isfulog.0
+        rputl isfulog.i
+        end
+     end
+  Address ISREdit
+  xc = isfcalls('off')
+  rc = erc
+  return
+
+/* ------------------------------------------- *
+ | Process the OMVS command:                   |
+ |                                             |
+ | 1. split commands using the ;               |
+ | 2. if su is found then set uid 0            |
+ | 3. issue command using bpxwunix             |
+ | 4. write all messages to the log (runcputl) |
+ | 5. reset uid 0 back if set                  |
+ * ------------------------------------------- */
+ do_omvs:
+ Address TSO
+ su = null
+ do until cmd = null
+    parse value cmd with xcmd';'cmd
+    cmd = strip(cmd)
+    Select
+    When xcmd = 'su' then do
+       su = 1
+       address syscall 'geteuid'
+       myeuid=retval
+       Address syscall "seteuid 0"
+       rputl 'Changed to SuperUser uid(0) from uid('myeuid')'
+       rputl
+       end
+    Otherwise do
+          rputl 'Command:' xcmd
+          erc = bpxwunix(xcmd,,stdout.,stderr.)
+          if erc > maxrc then maxrc = erc
+          rputl
+          rputl 'Return code:' erc
+       if stdout.0 > 0 then do
+          rputl
+          rputl 'Output of command:' xcmd
+          rputl
+          do ic = 1 to stdout.0
+             rputl stdout.ic
+             end
+          end
+       if stderr.0 > 0 then do
+          rputl
+          rputl 'Error output of command:' xcmd
+          rputl
+          do ic = 1 to stderr.0
+             rputl stderr.ic
+             end
+          end
+       drop stdout. stderr.
+       end
+    end
+ end
+ if su = 1 then do
+    su = 0
+    Address syscall "seteuid" myeuid
+    rc = syscalls("OFF")
+    rputl
+    rputl 'Changed back from SuperUser to uid('myeuid')'
+    end
+ Address ISREdit
+ return
+
+/* ----------------------- *
+ | Do TSO Console Commands |
+ * ----------------------- */
+ do_cons:
+ parse value cmd with x cmd
+ Address TSO
+ /* ------------------------------------- *
+  * Setup the CONSOLE command environment *
+  * ------------------------------------- */
+ "CONSPROF SOLDISP(no) SOLNUM(400) UNSOLDISP(yes)"
+ "CONSOLE ACTIVATE"
+
+ /* --------------------------------- *
+  * Execute the provided z/OS Command *
+  * --------------------------------- */
+ "CONSOLE SYSCMD("cmd") "
+
+ /* --------------------------------------------------------------- *
+  * Retrieve the results of the z/OS Command.                       *
+  *                                                                 *
+  * Note that the default wait time is 30 seconds. That value       *
+  * can be changed to any time frame that you need. Be aware that   *
+  * it is a maximum wait time and that if the command ends before   *
+  * that limit is reached then the results will be returned without *
+  * waiting for the wait time to expire.                            *
+  * --------------------------------------------------------------- */
+ erc = GETMSG('t.','sol',,,30)
+ if erc > maxrc then maxrc = erc
+
+ /* --------------------------------- *
+  * Close out the CONSOLE environment *
+  * --------------------------------- */
+ "CONSOLE DEACTIVATE"
+
+/* -------------- *
+ | Now report out |
+ * -------------- */
+ do i = 1 to t.0
+    rputl t.i
+    end
+ Address ISREdit
+ return
+
+/* ---------------------------------------------------- *
+ | Process the <DOC> section.                           |
+ |                                                      |
+ | Only the 1st <DOC> needs to be selected and RUNC     |
+ | will process all records until a </DOC> is found,    |
+ | or the end of the member/file is reached.            |
+ | Both <DOC> and </DOC> must be on records without     |
+ | additional text.                                     |
+ |                                                      |
+ | <TITLE> defines the title for the popup doc panel.   |
+ | No ending tag is required or allowed and it must     |
+ | be between <DOC> and </DOC> records.                 |
+ |                                                      |
+ | Documentation records may be up to 72 characters     |
+ | title records (only the last one found will be used) |
+ | may only be 32 characters.                           |
+ |                                                      |
+ | Symbolics are supported in title and text            |
+ |                                                      |
+ * ---------------------------------------------------- */
+ Do_Doc:
+  doc_start = l
+  rtbl      = 'RUNCD'random(999)
+  rtitle    = 'RUNC Documentation Popup'
+  '(lastrec) = linenum .zlast'
+  l = l + 1
+  cdoc = 0
+  drop doc.
+  do idoc = l to lastrec
+     '(data) = line' idoc
+     if pos('&',data) > 0 then do
+        cmd = data
+        call fix_cmd
+        if pos(x01,cmd) > 0 then
+           cmd = translate(cmd,'&',x01)
+        data = cmd
+        end
+     if left(word(data,1),1) = '<' then do
+        if word(translate(data),1) = '</DOC>' then leave
+        if pos('<TITLE>',translate(data)) > 0 then do
+           parse value data with . '>'rtitle
+           rtitle = strip(rtitle)
+           end
+        end
+     else do
+          cdoc = cdoc + 1
+          doc.cdoc = data
+          end
+     end
+  doc.0 = cdoc
+  l = idoc
+  if l > stop then l = stop
+  if doc.0 > 0 then do
+     Address TSO
+     rputl left(' ',72,'-')
+     rputl 'Doc Title:' rtitle
+     rputl ' '
+     Address ISPExec
+     'TBCreate' rtbl 'Names(rtext) nowrite'
+     do idoc = 1 to doc.0
+        rtext = doc.idoc
+        Address TSO rputl rtext
+        'tbadd' rtbl
+        end
+     Address TSO rputl left(' ',72,'-')
+     'tbtop' rtbl
+     do forever
+        'Addpop'
+        'TBDispl' rtbl 'Panel(RUNCDOCT)'
+        xrc = rc
+        'Rempop'
+        if xrc > 8 then zcmd = 'CANCEL'
+        if xrc = 8 then do
+           'TBEnd' rtbl
+           leave
+           end
+        if zcmd = 'CANCEL' then do
+           'TBEnd' rtbl
+           cmd = null
+           cancel = 1
+           stop = l
+           Address TSO
+           rputl ' '
+           rputl 'Cancel requested and processed.'
+           rputl ' '
+           return
+           end
+        end
+     end
+  Address ISREdit
+  cmd = null
+  return
+
+Do_EditMac:
+/* --------------------------------------------------------- *
+ | Function:  ISPF Edit Macro to Execute an inline Edit      |
+ |            macro within the active Edit Data              |
+ |                                                           |
+ | Usage Notes: Insert an edit macro inline in the edit data |
+ |              for processing by the EDITMAC command.       |
+ |                                                           |
+ |              <EM> starts the inline macro                 |
+ |              . . . any rexx edit macro code here          |
+ |              </EM> ends the inline macro                  |
+ |                                                           |
+ |              Placement should probably be as close to     |
+ |              the top of the data as possible.             |
+ |                                                           |
+ |              Suggest making the inline edit macro a       |
+ |              comment for the data it resides in and       |
+ |              use the offset parm if the comment is in     |
+ |              column 1.                                    |
+ |                                                           |
+ | Syntax: RUNC <offset>                                     |
+ |                                                           |
+ |         offset is the number of columns to skip to        |
+ |         extract the edit macro code thus ignoring any     |
+ |         comment characters.                               |
+ |                                                           |
+ | Selection: S on the record with the <em>                  |
+ |                                                           |
+ * --------------------------------------------------------- */
+
+  /* ------------------------ *
+  | Define default variables |
+  * ------------------------ */
+  null = ''
+  r = 0
+  hit = 0
+
+  /* ------------------------ *
+  | Validate the skip parm |
+  * ------------------------ */
+  if datatype(skip) /= 'NUM'
+  then skip = 1
+  if skip = 0 then skip = 1
+
+  /* -------------------------------------------------------- *
+  | Process the data records to find the inline edit macro   |
+  | and place the edit macro records into a stem variable.   |
+  |                                                          |
+  | The edit macro starts with <EM> and ends with </EM>      |
+  |                                                          |
+  | The skip is used to skip over text in the records that   |
+  | may be comments.                                         |
+  * -------------------------------------------------------- */
+  i = l
+  '(lastrec) = linenum .zlast'
+  do i = 1 to lastrec
+    '(data) = line' i
+    /* --------------------------------- *
+    | Extract the record from the data, |
+    | skipping over the skip.           |
+    * --------------------------------- */
+    data = strip(substr(data,skip))
+    /* ------------------------------------------ *
+    | Test for <EM> to start the data collection |
+    | and for </EM> to stop the data collection  |
+    * ------------------------------------------ */
+    if translate(left(data,4)) = '<EM>' then do
+      hit = 1
+      iterate
+    end
+    if translate(left(data,5)) = '</EM>' then do
+      hit = 0
+      leave
+    end
+    /* -------------------------------------------- *
+    | If hit is 0 then we are not collecting data. |
+    | If it is 1 then save the current record for  |
+    | processing.                                  |
+    * -------------------------------------------- */
+    if hit = 0 then iterate
+    r = r + 1
+    rec.r = data
+  end
+  /* ----------------------------------- *
+  | Save the number of records in rec.0 |
+  * ----------------------------------- */
+  rec.0 = r
+
+  /* ----------------------------------------------- *
+  | Define a temporary DDname and Dataset name.     |
+  | Allocate the temporary PDS and write the inline |
+  | edit macro's records to it.                     |
+  | Then Altlib the temporary PDS.                  |
+  * ----------------------------------------------- */
+  emdd = 'EMDD'random(4)
+  if sysvar('syspref') /= null
+  then emds = "'"sysvar("syspref")".temp."emdd
+  else emds = "'"sysvar("sysuid")".temp."emdd
+  emdslib = emds"'"
+  call outtrap 'x.'
+  address tso 'delete' emdslib
+  call outtrap 'off'
+  emds = emds"(edmac)'"
+  Address TSO
+  'alloc f('emdd') new space(1,1) tr recfm(v b) lrecl(255) blksize(0)' ,
+    'da('emds') dsorg(po) dir(1)'
+  'execio * diskw' emdd '(finis stem rec.'
+  'altlib act app(exec) da('emdslib')'
+
+  /* -------------------------------- *
+  | Now invoke the inline edit macro |
+  * -------------------------------- */
+  Address isredit
+  '%edmac'
+
+  /* -------------------------------------------------- *
+  | All done so free up the ALTLIB and Free and Delete |
+  | the temporary PDS.                                 |
+  * -------------------------------------------------- */
+  Address TSO
+  'altlib deact app(exec)'
+  'free f('emdd') delete'
+  Exit
+return
+
+/* ------------------------------------------------ *
+ | Process the SLEEP command                        |
+ |                                                  |
+ | The sleep command requires a value in seconds or |
+ | will default to 5 seconds.                       |
+ |                                                  |
+ | sleep nn                                         |
+ * ------------------------------------------------ */
+ Do_Sleep:
+   parse value cmd with x seconds .
+   Address TSO
+   if datatype(seconds) /= 'NUM' then do
+      rputl 'Sleep requries a numeric option on # of seconds'
+      if strip(seconds) = '' then seconds = 'blank'
+      rputl seconds 'was provided and is not numeric.'
+      rputl 'defaulting to 5 seconds.'
+      rputl ' '
+      seconds = 5
+      end
+  rputl 'Sleeping for' seconds 'seconds.'
+  address 'SYSCALL' 'SLEEP ('seconds')'
+  exitrc = 0
+  return
+
+/* --------------------------------------------------- *
+ | Process the RENAME command:                         |
+ |                                                     |
+ | Required syntax is:                                 |
+ |                                                     |
+ | RENAME rendsn rvol from-member-name to-member-name  |
+ |                                                     |
+ | rendsn - use tso conventions                        |
+ | rvol - may be * to use the catalog or a rvolser     |
+ | from-member-name - original member name             |
+ | to-member-name   - the new name for the member      |
+ * --------------------------------------------------- */
+ Do_Rename:
+ Address TSO
+ parse value cmd with x rendsn rvol fmbr tmbr
+
+/* --------------------------------------- *
+ | Build the rvolume keyword unless rvol = * |
+ * --------------------------------------- */
+  if rvol = '*'
+  then rvol = ''
+  else rvol = 'rvolume('rvol')'
+
+/* --------- *
+ | Fixup rendsn |
+ * --------- */
+ if sysdsn(rendsn) /= 'OK' then do
+    rputl ' '
+    rputl 'Rename DSN' rendsn sysdsn(rendsn)
+    rputl ' '
+    exitrc = 8
+    return
+    end
+
+/* --------------------------------- *
+ | Setup Addressing to ISPF Services |
+ * --------------------------------- */
+  Address ISPExec
+
+ parse value '0 0' with lmi lmo
+/* ------------------------------------------- *
+ | Access the PDS using LMInit as Shared Write |
+ * ------------------------------------------- */
+  'LMInit dataid(rdsn) Dataset('rendsn') ENQ(SHRW) org(PDSORG)' rvol
+  if rc > 0 then do
+     call rename_exit 'lminit' rc
+     call close
+     return
+     end
+  lmi = 1
+
+/* ----------------------- *
+ | Open the PDS for Output |
+ * ----------------------- */
+  'LMOpen dataid('rdsn') Option(OUTPUT)'
+  if rc > 0 then do
+     call rename_exit 'lmopen' rc
+     call close
+     return
+     end
+  lmo = 1
+
+/* --------------------- *
+ | Now rename the member |
+ * --------------------- */
+  'LMMREN DATAID('rdsn') Member('fmbr') Newname('tmbr')'
+  if rc > 0 then do
+     call rename_exit 'lmmren' rc
+     call close
+     return
+     end
+
+ Address TSO
+ rputl ' '
+ rputl 'Data set:' rendsn
+ rputl 'Member' fmbr 'renamed to' tmbr
+ rputl ' '
+
+/* -------------------------------------- *
+ | Now close and free the ISPF Allocation |
+ * -------------------------------------- */
+ Close:
+ Address ISPExec
+ if lmo = 1 then
+    'LMCLOSE DATAID('rdsn')'
+ if lmi = 1 then
+    'LMFREE DATAID('rdsn')'
+ Address TSO
+ exitrc = 8
+ Return
+
+/* ------------------- *
+ | rename_exit Routine |
+ * ------------------- */
+ rename_exit:
+ arg routine rcode
+ Address TSO
+ rputl 'Error in' routine 'with rc:' rcode
+ rputl 'sm:' zerrsm
+ rputl 'lm:' zerrlm
+ call close
+ return
+
+/* ---------------------------------------------------- *
+ | Process the <EXIT n> statement                       |
+ | where n is the return code value to test for equal   |
+ | or greater than. If the test is true (=>) then cease |
+ | RUNC processing.                                     |
+ * ---------------------------------------------------- */
+ Do_Exit:
+   ecmd = translate(cmd)
+   cmd = null
+   parse value ecmd with '<EXIT' exitrc'>'
+   exitrc = exitrc + 0
+   Address TSO ,
+      rputl 'Testing <EXIT' exitrc'>'
+   if datatype(exitrc) /= 'NUM' then do
+      Address TSO ,
+         rputl exitrc 'is not a valid numeric'
+      Address TSO rputl ' '
+      return
+      end
+   if maxrc >= exitrc then do
+      l = stop
+      Address TSO ,
+         rputl '<EXIT' exitrc'> has been met with RC of' ,
+               maxrc'. Exiting RUNC processing.'
+      Address TSO rputl ' '
+      end
+   else do
+        Address TSO rputl '<EXIT' exitrc'> not met with RC of' ,
+                          maxrc'. RUNC Continues.'
+        Address TSO rputl ' '
+        end
+   return
+
+/* ------------------------ *
+ | Define the sybolics once |
+ * ------------------------ */
+ Set_Symbols:
+ '(rdsnv)    = dataset'
+ '(rmbrv)    = member'
+ '(rvolserv) = volume'
+ if symbols.0        = null then do
+    symbols.0        = 1   /* set flag */
+    symbols.userid   = sysvar('sysuid')
+    symbols.useridl  = lower(symbols.userid)
+    symbols.sysuid   = symbols.userid
+    symbols.prefix   = sysvar('syspref')
+    symbols.syspref  = symbols.prefix
+    symbols.sysname  = mvsvar('sysname')
+    symbols.sysid    = right(symbols.sysname,1)
+    symbols.syssmfid = mvsvar('syssmfid')
+    symbols.smfid    = symbols.syssmfid
+    symbols.lpar     = symbols.sysname
+    symbols.sysplex  = mvsvar('sysplex')
+    symbols.jdate    = date('j')
+    symbols.julian   = symbols.jdate
+    symbols.doy      = date('d')
+    symbols.sdate    = date('s')
+    symbols.edate    = date('e')
+    symbols.odate    = date('o')
+    symbols.date     = date('u')
+    symbols.udate    = date('u')
+    symbols.weekday  = date('w')
+    symbols.month    = date('m')
+    symbols.dd       = right(symbols.sdate,2)
+    symbols.mm       = substr(symbols.sdate,5,2)
+    symbols.yy       = substr(symbols.sdate,3,2)
+    symbols.yyyy     = left(symbols.sdate,4)
+    symbols.hhmm     = left(time('n'),2)''substr(time('n'),4,2)
+    symbols.rdsn     = rdsnv
+    symbols.rmbr     = rmbrv
+    symbols.rmem     = rmbrv
+    symbols.rvolser  = rvolserv
+    rvolser   = rvolserv
+    rdsn      = rdsnv
+    rmbr      = rmbrv
+    rmem      = rmbrv
+    sysuid    = symbols.sysuid
+    userid    = symbols.userid
+    useridl   = symbols.useridl
+    prefix    = symbols.prefix
+    syspref   = symbols.syspref
+    sysname   = symbols.sysname
+    sysid     = symbols.sysid
+    syssmfid  = symbols.syssmfid
+    smfid     = symbols.smfid
+    lpar      = symbols.lpar
+    sysplex   = symbols.sysplex
+    jdate     = symbols.jdate
+    julian    = jdate
+    doy       = symbols.doy
+    sdate     = symbols.sdate
+    edate     = symbols.edate
+    odate     = symbols.odate
+    udate     = symbols.udate
+    date      = symbols.date
+    weekday   = symbols.weekday
+    month     = symbols.month
+    dd        = symbols.dd
+    mm        = symbols.mm
+    yy        = symbols.yy
+    yyyy      = symbols.yyyy
+    hhmm      = symbols.hhmm
+    Address ISPExec 'vput (' ,
+          'sysuid prefix syspref sysname syssmfid smfid lpar' ,
+          'sysplex julian doy sdate edate odate udate weekday' ,
+          'month dd mm yy yyyy userid useridl sysid hhmm' ,
+          'rdsn rmbr rmem rvolser date jdate)'
+ end
+ return
+
+/* ----------------------------------------------------- *
+ | If there are any symbolics in the command then this   |
+ | routine is called.                                    |
+ |                                                       |
+ | Dynamically generate an ISPF panel and display it to  |
+ | prompt the user for the symbolics and then update the |
+ | command.                                              |
+ |                                                       |
+ | Return the command for processing.                    |
+ * ----------------------------------------------------- */
+ fix_cmd:
+ symbolics = null
+ runcsyms  = null
+ tcmd = cmd
+ wcmd = cmd
+ symbhit = 0
+
+/* ------------------------------------------------ *
+ | Find each symbolic coded in the command:         |
+ | - if &&symbolic then convert && to x'01' for now |
+ | - otherwise process symbolic                     |
+ * ------------------------------------------------ */
+ if pos('&&',wcmd) > 0 then do
+    do until pos('&&',wcmd) = 0
+       lp = pos('&&',wcmd)
+       lcmd = left(wcmd,lp-1)
+       rcmd = substr(wcmd,lp+2)
+       wcmd = lcmd''x01''rcmd
+       cmd  = wcmd
+       end
+    end
+ if pos('&',wcmd) > 0 then
+    do until pos('&',wcmd) = 0
+       symbhit = 1
+       ap = pos('&',wcmd)
+       ro = substr(wcmd,ap)
+       wcmd = substr(wcmd,ap+1)
+       opt = ''
+       do ip = 2 to length(ro)
+          if pos(substr(ro,ip,1),special) > 0 then leave
+          else opt = opt''substr(ro,ip,1)
+          end
+ if wordpos(translate(opt),setsyms) = 0 then
+ if opt /= '' then do
+    ro = substr(ro,length(opt)+2)
+    Select
+    When crbs = 'Y' then do
+         if symbol(opt) = 'VAR' then do
+            if wordpos(opt,runcsyms) = 0 then
+               runcsyms = runcsyms opt
+            end
+         else if wordpos(opt,symbolics) = 0
+              then symbolics = symbolics opt
+         end
+    Otherwise
+       if wordpos(opt,symbolics) = 0 then
+          symbolics = symbolics opt
+    end
+    end
+ end
+
+ if symbhit = 0 then do
+    cmd = wcmd
+    return
+    end
+
+/* ------------------------------------- *
+ | Only prompt if user symbolics defined |
+ * ------------------------------------- */
+ if words(symbolics) > 0 then do
+   /* --------------------------- *
+    | Call symbolics sort routine |
+    * --------------------------- */
+    if words(symbolics) > 1 then call sort_symbolics
+
+   /* ----------------------------- *
+    | Now build the prompting panel |
+    * ----------------------------- */
+    Address TSO
+    runcddn = 'RUNC'random(999)
+    if sysvar('syspref') = null then runcdsn = sysvar('sysuid')'.'runcddn
+                                else runcdsn = runcddn
+    'Alloc f('runcddn') spa(1,1) tr recfm(f b) lrecl(80) blksize(32720)' ,
+      'ds('runcdsn'('runcddn')) dir(1)'
+      p.1 =    ')Attr Default(%+_)'
+      p.2 =    ' %   type(text)  intens(high) skip(on) caps(off)'
+      p.3 =    ' _   type(input) caps(off) hilite(uscore)'
+      p.4 =    ' # area(SCRL) Extend(ON)'
+      p.5 =    ')Body expand(\\)'
+      p.6 =    '%-\-\-+Run TSO Command' ver'%-\-\-'
+      p.7 =    '%Command ===>_zcmd' left(' ',58) '+'
+      p.8 =    '+'
+      p.9 = '#area' left('-',72,'-') '#'
+      p.10 = ')Area area'
+      p.11 =  '%Command:+&tcmd'
+      p.12 =     ' '
+      p.13=    '+'
+      i = 14
+      p.i =    '+Symbolics to be updated:'
+      i = i + 1
+      p.i =    '+'
+      i = i + 1
+      p.i = '%   'left('Symbolic',13)   'Value'
+      do is = 1 to words(symbolics)
+         sym = Translate(word(symbolics,is))
+         i = i + 1
+         if symbols.sym /= null
+            then interpret 's'is '= symbols.sym'
+         p.i = '%   'left(sym,12)':_'s''is left(' ',56) '+'
+         end
+      i = i + 1
+      p.i =    '+'
+      i = i + 1
+      p.i =    '+Enter or PF3 to Continue, CANCEL to cancel this command'
+      i = i + 1
+      p.i =    '+'
+      i = i + 1
+      p.i =    ')Init'
+      i = i + 1
+      p.i =    ')Proc'
+      i = i + 1
+      p.i =    ')End'
+      p.0 = i
+
+   /* ------------------------------------- *
+    | Write out the new ispf panel and then |
+    | display it.  When done release it.    |
+    * ------------------------------------- */
+    'Execio * diskw' runcddn' (finis stem p.'
+    Address ISPExec
+    'libdef ispplib dataset id('runcdsn') stack'
+    'display panel('runcddn')'
+    'libdef ispplib'
+    Address TSO ,
+    'Free f('runcddn') Delete'
+    cancel = abbrev('CANCEL',translate(zcmd),3)
+    end
+
+/* ---------------------------------- *
+ | Now fix command with the symbolics |
+ * ---------------------------------- */
+ symbolics = symbolics runcsyms
+ do i = 1 to words(symbolics)
+    test = word(symbolics,i)
+    if wordpos(test,setsyms) > 0 then do
+       pw = wordpos(test,setsyms)
+       ps = subword(setsyms,pw)
+       parse value ps with test sym x01
+       end
+    else do
+    if symbol(test) = 'LIT'
+       then interpret 'sym = s'i
+       else interpret 'sym =' test
+       end
+    ws = translate(word(symbolics,i))
+    symbols.ws = sym   /*  3.6 */
+    pw = 1
+    do forever
+       pw = pos('&'test,cmd)
+       if pw = 0 then leave
+       pl = length('&'test)
+       cmdl = left(cmd,pw-1)
+       cmdr = substr(cmd,pw+pl)
+       if left(cmdr,1) = '.' then
+          cmdr = substr(cmdr,2)
+       cmd = cmdl''sym''cmdr
+       end
+    interpret 's'i '= null'
+    end
+ if setsyms = null then return
+ do i = 1 to words(setsyms) by 3
+    w1 = wordpos(word(setsyms,i),setsyms)
+    test = subword(setsyms,w1)
+    wvar = word(test,1)
+    parse value test with . sym (x01) .
+       sym = strip(sym)
+       pw = pos('&'wvar,translate(cmd))
+       if pw = 0 then leave
+       pl = length('&'wvar)
+       cmdl = left(cmd,pw-1)
+       cmdr = substr(cmd,pw+pl)
+       if left(cmdr,1) = '.' then
+          cmdr = substr(cmdr,2)
+       cmd = cmdl''sym''cmdr
+    end
+ return
+
+/* ----------------------------------------------------------- *
+ | Help Procedure                                              |
+ * ----------------------------------------------------------- */
+ Help:
+ Address ISPEXEC
+ 'Select pgm(isptutor) parm(#runc)'
+ exit
+
+/* ------------------------- *
+ | Display RUNC Log Datasets |
+ * ------------------------- */
+ Display_logs:
+ Address ISPEXEC
+ 'Select cmd(%runclog)'
+ exit
+
+/* ------------------------------------------------------- *
+ | Check_Defaults:                                         |
+ |                                                         |
+ | 1. Open RUNCSET table from ISPPROF                      |
+ | 2. If not found then call Set_Defaults to create/update |
+ | 3. Compare defaults to provided options                 |
+ | 4. Runtime options over-ride defaults                   |
+ * ------------------------------------------------------- */
+ Check_Defaults:
+ Address ISPExec
+ 'TBOpen RUNCSET Library(ISPPROF)'
+ if rc = 8 then do
+    runcset_new = 1
+    call Set_Defaults
+    Address ISPExec
+    'TBOpen RuncSet Library(ISPPROF)'
+    end
+ 'TBSkip RuncSet'
+ 'TBGet RuncSet'
+ call Resolve_Options
+ 'TBEnd RuncSet'
+ Address ISREdit
+ Return
+
+/* ---------------------------------------------- *
+ | Set_Defaults:                                  |
+ |                                                |
+ | 1. If runcset_new is 1 then create the table   |
+ | 2. Open the RUNCSET table from ISPPROF         |
+ | 3. Read the 1st (only) row                     |
+ | 4. Display panel to review/update/set defaults |
+ | 5. Save table                                  |
+ | 6. Return                                      |
+ * ---------------------------------------------- */
+ Set_Defaults:
+ Address ISPExec
+ call Set_Options
+ if runcset_new = 1 then do
+    rpo = 'Y'
+    'TBCreate RUNCSET Library(ISPPROF) Write' ,
+       'Keys(runc)' ,
+       'Names(rbo rto rvo rdo rno rro rso rwo)'
+    end
+ else 'TBOpen RuncSet Library(ISPPROF) Write'
+ parse value '' with crbo crto crvo crdo crno crro crlo crio
+ if crio = '' then crio = 'N'
+ if rdo /= 'N'
+    then if rdo /= 'Y'
+         then do
+              rdp = rdo
+              rdo = 'Y'
+              end
+ do forever
+    'Display Panel(runcset)'
+    if rc > 0 then leave
+    end
+ if translate(zcmd) = 'CANCEL' then do
+    'TBEnd RuncSet'
+    Address ISREdit
+    return
+    end
+ if rdo /= 'N'
+    then if rdp /= null
+         then rdo = rdp
+ if rpo = 'Y' then do
+    runc = 'RUNC'
+    'TBMOd  RuncSet Save(rlo rbs rio)'
+    'TBSave RuncSet Library(ISPPROF)'
+    end
+ 'TBEnd RuncSet'
+ if rlo = 'N' then crlo = 'N'
+              else do
+                   crlo = rlo
+                   logtype = rlo
+                   end
+ call Resolve_Options
+ Address ISREdit
+ return
+
+/* --------------------------------------------- *
+ | Set_Options:                                  |
+ |                                               |
+ | Take current options and update variables for |
+ | the defaults setting panel                    |
+ |                                               |
+ | Defaults:                                     |
+ |                                               |
+ | Browse   = No                                 |
+ | Terminal = No                                 |
+ | View     = Yes                                |
+ | Data     = No                                 |
+ | Noteline = No                                 |
+ | Report   = Yes                                |
+ | StopRC   = null                               |
+ | Warp     = null                               |
+ | Log      = No                                 |
+ | RBS      = Yes                                |
+ | RIO      = No                                 |
+ * --------------------------------------------- */
+ Set_Options:
+   if crbo = null then rbo = 'N'
+   if crro = null then rro = 'Y'
+   if crvo = null then rvo = 'Y'
+   if crto = null then rto = 'N'
+   if crdo = null then rdo = 'N'
+                  else rdo = crdo
+   if crno = null then rno = 'N'
+   if crlo = null then rlo = 'N'
+   if crso = null then rso = 0
+   if crwo = null then rwo = 0
+   if crbs = null then rbs = 'Y'
+   if crio = null then rio = 'N'
+ return
+
+/* ------------------------------------------------ *
+ | Resolve_Options routine:                         |
+ |                                                  |
+ | Take the default options and merge them with the |
+ | command options while resolving over-rides.      |
+ * ------------------------------------------------ */
+ Resolve_Options:
+  if crro = 'Y' then rro = 'Y'
+  if crbo = 'Y' then rbo = 'Y'
+  if crio = 'Y' then rio = 'Y'
+  if crlo /= null then rlo = crlo
+  if rlo = 'N' then crlo = null
+     else do
+          crlo = rlo
+          end
+  if rbo = 'Y' then do
+     rdo = 'N'
+     rno = 'N'
+     rto = 'N'
+     rvo = 'N'
+     trapopt = 'B'
+     bvhit = 1
+     end
+  if crto = 'Y' then rto = 'Y'
+  if rto = 'Y' then do
+     rbo = 'N'
+     rdo = 'N'
+     rno = 'N'
+     rvo = 'N'
+     rro = 'N'
+     rlo = 'N'
+     rio = 'N'
+     trapopt = 'T'
+     end
+  if crvo = 'Y' then rvo = 'Y'
+  if rvo = 'Y' then do
+     rbo = 'N'
+     rto = 'N'
+     rdo = 'N'
+     rno = 'N'
+     trapopt = 'V'
+     bvhit = 1
+     end
+  if crdo /= null then rdo = crdo
+  if rdo /= 'N' then
+     if rdo /= null then do
+        rbo = 'N'
+        rno = 'N'
+        rto = 'N'
+        rvo = 'N'
+        rlo = 'N'
+        rio = 'N'
+        end
+  if crno = 'Y' then rno = 'Y'
+  if rno = 'Y' then do
+     rbo = 'N'
+     rdo = 'N'
+     rto = 'N'
+     rvo = 'N'
+     rlo = 'N'
+     rio = 'N'
+     end
+  crbo = rbo
+  crto = rto
+  crvo = rvo
+  crdo = rdo
+  crno = rno
+  crro = rro
+  if rlo = 'N' then crlo = null
+     else do
+          crlo = rlo
+          logtype = rlo
+          end
+  if rbs = 'N' then crbs = 'N'
+               else crbs = 'Y'
+  if bypass_rs = 1 then if rbs = 'Y' then crbs = 'N'
+                   else if rbs = 'N' then crbs = 'Y'
+  if rio = 'N' then crio = 'N'
+               else crio = 'Y'
+  if rso = 0 then crso = null
+  if rwo = 0 then crwo = null
+  parse value '0 0 0 0' with bvhit dhit nhit runcrpt
+  if rbo = 'Y' then bvhit = 1
+  if rvo = 'Y' then bvhit = 1
+  if rdo /= 'N' then
+     if rdo /= null then dhit = 1
+  if rno = 'Y' then nhit  = 1
+  if rro = 'Y' then runcrpt = 1
+  return
+
+/* ------------------------------------- *
+ * Name:     Lower                       *
+ *                                       *
+ * Function: Lowercase the provided data *
+ *                                       *
+ * Syntax:   x=lower(input)              *
+ *                                       *
+ * History:                              *
+ *           08/17/07: created           *
+ * ------------------------------------- */
+ Lower: Procedure
+ parse arg input
+ out = translate(input,"abcdefghijklmnopqrstuvwxyz",,
+                       "ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+ return out

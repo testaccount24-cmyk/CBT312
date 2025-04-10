@@ -1,0 +1,8 @@
+The following members are in this dataset:
+
+   $README   - what you are reading
+   ASM       - IDTF format DDLIST assembler rexx function
+   EXEC      - IDTF format REXX Exec library
+   PANELS    - IDTF ISPF Panels library
+   RECEIVE   - execute this to rebuild the ASM, EXEC, and PANEL libraries
+

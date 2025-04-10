@@ -1,0 +1,26 @@
+)Attr Default(%+_)
+   $ type(input)  intens(high) caps(on ) just(left ) hilite(uscore)
+   @ type(input)  intens(high) caps(off) just(left ) hilite(uscore)
+    type(output) intens(low)  color(green)
+   ` type(text)   intens(high) color(green)
+   ! type(text)   intens(high) color(turq)
+   ~ type(text)   intens(high) color(green) hilite(reverse)
+)Body  Expand(\\)
+%-\-\-~OMVSPAX Menu%-\-\-%
+%Option ===>_zcmd
+%
+!            B` Backup an OMVS directory, with subdirectories,
+!             ` to a z/OS dataset.
+!            L` List the pax information for a z/OS pax backup dataset.
+!            R` Restore an OMVS directory, with subdirectories,
+!             ` from a z/OS data
+%
+)Init
+)Proc
+   &ZSEL=TRANS(TRUNC(&ZCMD,'.')
+          B,'CMD(%OMVSPAXB)'
+          L,'CMD(%OMVSPAXL)'
+          R,'CMD(%OMVSPAXR)'
+          ' ',' '
+          *,'?' )
+)End

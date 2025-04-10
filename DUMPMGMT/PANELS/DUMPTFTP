@@ -1,0 +1,30 @@
+)Attr Default(%+_)
+/* % type(text  ) intens(high)              Defaults displayed for */
+/* + type(text  ) intens(low )                   information only  */
+/* _ type( input) intens(high) caps(on ) just(left )               */
+   ! type( input) intens(high) caps(on ) just(left )
+   # type( input) intens(high) caps(off) just(left )
+   ¬ type(output) intens(low ) caps(off) just(asis )
+   @ type(output) intens(low ) caps(off) just(asis ) color(yellow)
+   ~ type(text) intens(high) color(blue) hilite(reverse)
+)Body  Expand(//)
+%-/-/- ~Terse and FTP Dump Dataset%-/-/-
+%Command ===>_zcmd
++
+   Dump Dataset Name:  @dumpdsn
++
+   Terse Dataset Name: !tersedsn
++
++Optional:
++
++      FTP Host name:  !ftphost
++
++      If the FTP Host name is used then the FTPB ISPF Dialog will be
++      invoked to allow you to FTP the dump to a vendor
++
+%      Remember that you will need to FTP the dump as non-MVS and in Binary
+)Init
+)Reinit
+)Proc
+ ver(&tersedsn,nb,dsname)
+)End

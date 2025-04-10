@@ -1,0 +1,64 @@
+        /* ---------------------  rexx procedure  ---------------------- *
+         * Name:      sdmplog                                            *
+         *                                                               *
+         * Function:  Extract dump title from dump and then update       *
+         *            mvs.dumplog with dump dsn and title                *
+         *                                                               *
+         * Syntax:    %sdmplog dump.dsn                                  *
+         *                                                               *
+         * Author:    Lionel B. Dyck                                     *
+         *            Kaiser Permanente                                  *
+         *            Walnut Creek, CA 94598                             *
+         *            (925) 926-5332                                     *
+         *            Internet: lionel.b.dyck@kp.org                     *
+         *                                                               *
+         * History:                                                      *
+         *            09/17/99 - change dsname to 44 characters          *
+         *            12/11/98 - removed ml2 (not required)              *
+         *            12/08/98 - change to hmig to ml2 directly          *
+         *            03/23/98 - strip title                             *
+         *            03/19/98 - clean up                                *
+         *            12/24/97 - creation                                *
+         *                                                               *
+         * ------------------------------------------------------------- */
+
+        arg dsn .
+
+        if left(dsn,1) = "'" then
+           parse value dsn with "'" dsn "'"
+
+        dsn = strip(dsn)
+
+        dd = "dump"random()
+        Alloc_Dump:
+          "Alloc f("dd") old ds('"dsn"')"
+           if rc > 0 then do /* wait a bit */
+              do i = 1 to 100000
+                 x = i + 1
+                 end
+              signal alloc_dump
+              end
+        "Execio 1 diskr" dd "(finis stem in."
+        "Free f("dd")"
+        parse value in.1 with 89 title 189 .
+
+        rec.1 = "           "left(dsn,44) strip(title)
+
+        Alloc:
+           "Alloc f("dd") mod ds('mvs.dumplog')"
+           if rc > 0 then do /* wait a bit */
+              do i = 1 to 100000
+                 x = i + 1
+                 end
+              signal alloc
+              end
+           "Execio * diskw" dd "(finis stem rec."
+           "Free  f("dd")"
+
+        Say "Dump DSN:  " dsn
+        Say "Dump Title:" title
+        Say " "
+        "HMig '"dsn"'"
+        say "HMig '"dsn"'"
+
+        "%dumplogp '"dsn"'" title

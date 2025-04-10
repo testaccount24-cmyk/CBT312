@@ -1,0 +1,35 @@
+)ATTR DEFAULT(%$_)
+   %   TYPE(TEXT)   INTENS(HIGH) SKIP(ON)
+   $   TYPE(TEXT)   INTENS(LOW)  SKIP(ON) COLOR(GREEN)
+   @   TYPE(output) INTENS(HIGH) caps(off)
+   _   TYPE(INPUT)  INTENS(HIGH) CAPS(ON) JUST(LEFT) HILITE(USCORE)
+)BODY EXPAND(\\)
+%Tutorial$-\-\-(%RUNC - Edit Macro$)-\-\-%Tutorial
+%Command ===>_ZCMD
+$
+$RUNC Usage Notes
+$
+$  11. Commands can be located in any position on the record.
+$  12  Place a symbolic at the end to allow entry of additional options.
+$  13. A symbolic that ends with a . will have the . removed and the
+$      adjoining text merged with the symbolic value.
+$  14. User security settings control CONS, (E)JES, SDSF or OMVS commands.
+$  15.%PREFIX$and%SUFFIX$only apply to%TSO$commands.
+$  16.%-W$is used with%-D$and%-N$to wrap the text that is inserted into
+$      the command member or dataset. The wrap is at the nearest blank or
+$      at the actual character location.
+$  17.%-W$may have a parameter of%W$to set the wrap to the edit width.
+$  18.%-D$and%-N$override%-B -T -V -L$and%-T$overrides%-D -N -R -L.
+$  19. Comments may be used in records and must be after the command and
+$      must start with a%/*$and there is no need for a */ to end the comment.
+$  20.%-D(prefix)$is optional and may be any number of characters, including
+$      blanks. Leading and trailing blanks are removed and the data is prefixed
+$      with this string with a space separator.
+$
+$ \ \ (press%ENTER$to continue) \ \
+)INIT
+ &SEP = '*, /*, //, //*'
+)PROC
+  &ZUP     = #RUNC4
+  &ZCONT   = #RUNC6
+)END

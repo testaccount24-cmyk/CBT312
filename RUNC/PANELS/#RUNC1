@@ -1,0 +1,32 @@
+)ATTR DEFAULT(%+_)
+   %   TYPE(TEXT)  INTENS(HIGH) SKIP(ON)
+   +   TYPE(TEXT)  INTENS(LOW)  SKIP(ON) COLOR(GREEN)
+   _   TYPE(INPUT) INTENS(HIGH) CAPS(ON) JUST(LEFT) HILITE(USCORE)
+)BODY EXPAND(\\)
+%Tutorial+-\-\-(%RUNC - Edit Macro+)-\-\-%Tutorial
+%Command ===>_ZCMD
++
++Record Selection:
++
++  %C+    Select an individual record (Think C = Command)
++  %S+    Select an individual record (Think S = Select)
++
++  %C#+   Select # records
++  %S#+   Select # records
++
++  %CC+   Select a range of contiguous records
++  %SS+   Select a range of contiguous records
++
++        001200
++        s01300        This single record will be executed.
++   or
++        ss2100        This block
++        002200           of three records
++        ss2300               will be executed.
++
++
++ \ \ (press%ENTER+to continue) \ \
+)PROC
+  &ZUP     = #RUNC
+  &ZCONT   = #RUNC2
+)END

@@ -1,0 +1,42 @@
+        /* ---------------------  rexx procedure  ---------------------- *
+         * Name:      Gensub                                             *
+         *                                                               *
+         * Function:  Generalized submission routine                     *
+         *                                                               *
+         * Syntax:    %gensub dsname                                     *
+         *                                                               *
+         * Author:    Lionel B. Dyck                                     *
+         *            Kaiser Permanente                                  *
+         *            Walnut Creek, CA 94598                             *
+         *            (510) 926-5332                                     *
+         *            IBMMail:  USKFHLBD                                 *
+         *            Internet: LIONEL.B.DYCK@NCAL.kaiperm.org           *
+         *            IBMLINK:  SYSLBD                                   *
+         *                                                               *
+         * History:   mm/dd/yy                                           *
+         *            06/16/95 - creation                                *
+         *                                                               *
+         * ------------------------------------------------------------- */
+
+         arg dsnx
+
+         Address ISPExec
+
+         do forever
+            "Display Panel(GenSub)"
+            if rc > 0 then exit
+            Select
+            When opt = "E" then "Edit Dataset("dsnx")"
+            When opt = "B" then "Browse Dataset("dsnx")"
+            When opt = "S" then
+                 Address TSO "Submit" dsnx
+            When opt = "C" then do
+                 zmsg000s = "Cancelled"
+                 zmsg000l  = "Job submission cancelled"
+                 "Setmsg Msg(ispz000)"
+                 exit
+                 end
+            Otherwise nop
+            end
+         end
+

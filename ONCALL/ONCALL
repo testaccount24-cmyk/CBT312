@@ -1,0 +1,11 @@
+/* rexx */
+
+address tso
+'altlib activate application(exec) dataset(oncall.new.exec)'
+address ispexec
+'libdef ispplib dataset id(oncall.new.panels) stack'
+'select cmd(%oncall) newappl(isr) passlib'
+address tso
+'altlib deactivate application(exec)'
+address ispexec
+'libdef ispplib'

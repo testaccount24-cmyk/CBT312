@@ -1,0 +1,32 @@
+)ATTR DEFAULT(%+_)
+   %   TYPE(TEXT)  INTENS(HIGH) SKIP(ON)
+   +   TYPE(TEXT)  INTENS(LOW)  SKIP(ON) COLOR(GREEN)
+   _   TYPE(INPUT) INTENS(HIGH) CAPS(ON) JUST(LEFT) HILITE(USCORE)
+)BODY EXPAND(\\)
+%Tutorial+-\-\-(%RUNC - Edit Macro+)-\-\-%Tutorial
+%Command ===>_ZCMD
++
++RUNC is an edit macro to execute OMVS, (E)JES/SDSF, TSO and ISPF commands.
++
++Syntax: %RUNC options+
++
+    %?+   Display tutorial           %-I+    Display Individual Command Msgs
+   %%n+   Skip the first n characters%-L+    Log messages to perm dataset
+   %-A+   Execute all records        %-N+    Insert the results as Notelines
+   %-ALL+ Execute all records        %-O+    Change user default options
+   %-B+   Browse the results         %-R+    Display report if messages
+   %-BS+  Toggle Prompt for Symbolics%-S nnn+Stop execution if RC > nnn
+   %-C+   Clean up LOG datasets      %-T+    Display all messages on screen
+   %-D+   Insert the results as Data %-V+    View the results (default)
++or%-D(xx)+Optional prefix           %-W nnn+Wrap text used with%-D+and%-N+
++
++      %-LD+and%-LP+will log to a sequential or partitioned dataset
++      %ONLY(string)+. Only execute commands containing the text string
++      %PREFIX(string)+Add the string to the front of each command (TSO Only)
++      %SUFFIX(string)+Append the string to the end of each command (TSO Only)
++
++ \ \ (press%ENTER+to continue) \ \
+)PROC
+  &ZUP     = #RUNC
+  &ZCONT   = #RUNC1
+)END

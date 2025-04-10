@@ -1,0 +1,474 @@
+* z/OS Commands
+
+* Display IPL Info
+sdsf d iplinfo
+sdsf d iplinfo,osprotect
+sdsf d iplinfo,zaapziip
+sdsf d iplinfo,ALLOC
+sdsf d iplinfo,CEE
+sdsf d iplinfo,CLOCK
+sdsf d iplinfo,CLPA
+sdsf d iplinfo,CMB
+sdsf d iplinfo,CMD
+sdsf d iplinfo,CON
+sdsf d iplinfo,COUPLE
+sdsf d iplinfo,CSA
+sdsf d iplinfo,DEVSUP
+sdsf d iplinfo,DIAG
+sdsf d iplinfo,FIX
+sdsf d iplinfo,GRS
+sdsf d iplinfo,GRSCNF
+sdsf d iplinfo,GRSRNL
+sdsf d iplinfo,GTZ
+sdsf d iplinfo,HZS
+sdsf d iplinfo,ILMLIB
+sdsf d iplinfo,ILMMODE
+sdsf d iplinfo,IOS
+sdsf d iplinfo,LNKAUTH
+sdsf d iplinfo,LOGCLS
+sdsf d iplinfo,LOGLMT
+sdsf d iplinfo,LOGREC
+sdsf d iplinfo,LPA
+sdsf d iplinfo,MAXCAD
+sdsf d iplinfo,MAXUSER
+sdsf d iplinfo,MLPA
+sdsf d iplinfo,MSTRJCL
+sdsf d iplinfo,NSYSLX
+sdsf d iplinfo,OMVS
+sdsf d iplinfo,OPI
+sdsf d iplinfo,OPT
+sdsf d iplinfo,PAK
+sdsf d iplinfo,PLEXCFG
+sdsf d iplinfo,PROD
+sdsf d iplinfo,PROG
+sdsf d iplinfo,RDE
+sdsf d iplinfo,REAL
+sdsf d iplinfo,RER
+sdsf d iplinfo,RSU
+sdsf d iplinfo,RSVNONR
+sdsf d iplinfo,RSVSTRT
+sdsf d iplinfo,SCH
+sdsf d iplinfo,SMF
+sdsf d iplinfo,SMS
+sdsf d iplinfo,SQA
+sdsf d iplinfo,SSN
+sdsf d iplinfo,SVC
+sdsf d iplinfo,SYSNAME
+sdsf d iplinfo,VAL
+sdsf d iplinfo,VIODSN
+sdsf d iplinfo,VRREGN
+
+* Display IPL Volume
+sdsf d u,iplvol
+
+* Display MVS Allocation Settings
+sdsf d alloc,options
+
+* Display Catalog Info
+sdsf f catalog,report
+sdsf f catalog,report,cache
+sdsf f catalog,report,performance
+
+* Display ASM Info
+sdsf d asm,plpa
+sdsf d asm,common
+sdsf d asm,local
+sdsf d asm,scm
+sdsf d asm,all
+sdsf d asm,pagedel
+
+* Display Auto Reply Info
+sdsf d autor
+sdsf d autor,policy
+sdsf d autor,wtors
+
+* Display Current LE options
+sdsf d cee,ceecopt
+sdsf d cee,ceedopt
+sdsf d cee,celqdopt
+sdsf d cee,celqropt
+sdsf d cee,all
+
+* Display Coupling Facility Info
+sdsf d cf
+
+* Display Console Info
+sdsf d consoles
+sdsf d cngrp
+
+* Display Diag parmlib info
+sdsf d diag
+sdsf ro syp,d diag
+
+* Display Data lookaside facility (DLF)
+sdsf d dlf
+sdsf d dlf,res=(*,*)
+
+* Display System Dump Info
+sdsf d d
+* dump dataset status
+sdsf d d,s
+* dump options
+sdsf d d,o
+
+* Display Extended MCS Info
+sdsf d emcs,summary
+sdsf d emcs,info
+sdsf d emcs,full
+
+* Display Console info
+sdsf d c
+* display console buffers
+sdsf d c,b
+
+* Display External Timer (ETR)
+sdsf d etr
+
+* GRS Displays
+sdsf d grs
+sdsf d grs,all
+sdsf d grs,system
+sdsf d grs,system,link
+sdsf d grs,rnl=a
+sdsf d grs,contention
+sdsf d grs,analyze,waiter
+sdsf d grs,analyze,depend
+sdsf d grs,res=(sysdsn,*)
+sdsf d grs,res=(syszckt.*)
+sdsf d grs,res=(syszpkt.*)
+sdsf d grs,res=(sysztkt.*)
+sdsf d grs,res=(*,&dsname)
+
+* Display Generic Tracker
+sdsf d gtz,status
+sdsf d gtz,trackdata
+sdsf d gtz,exclude
+sdsf d gtz,debug
+
+* Display TSO/E Parmlib Info
+sdsf d ikjtso
+
+* Display I/O configuration
+sdsf d ios,config
+sdsf d ios,captucb
+sdsf d ios,cugrp
+sdsf d ios,dcm
+sdsf d ios,ekm
+sdsf d ios,zhpf
+sdsf d ios,ficon
+sdsf d ios,group
+sdsf d ios,hiperpav
+sdsf d ios,hyperwrite
+sdsf d ios,midaw
+sdsf d ios,mih
+sdsf d ios,recovery
+sdsf d ios,storage
+sdsf d ios,stop
+
+* Display Missing Interrupt Handler (MIH) values
+sdsf d ios,mih,time=tape
+sdsf d ios,mih,time=all
+
+* Display PCIE Parms
+sdsf d iqp
+
+* Display LLA Information
+sdsf d lla
+sdsf d lla,stats
+
+* Display System Logger
+sdsf d logger
+sdsf d logger,ixgcnf
+sdsf d logger,logstream
+sdsf d logger,structure
+
+* Display Logrec info
+sdsf d logrec
+sdsf d logrec,dataset
+sdsf d logrec,all
+
+* Display System configuration info
+sdsf d m
+sdsf d m=cpu
+sdsf d m=dev
+sdsf d m=high
+sdsf d m=hsa
+sdsf d m=scm(detail)
+sdsf d m=storage
+
+* Display message flood automation info
+sdsf d msgfld
+sdsf d msgfld,defaults
+sdsf d msgfld,jobs
+sdsf d msgfld,msgs
+sdsf d msgfld,parameters
+
+* Display Message Suppression
+sdsf d mpf
+
+* Display Status of z/OS Unix System Services (OMVS)
+sdsf d omvs
+sdsf d omvs,o
+sdsf d omvs,s
+* display sockets
+sdsf d omvs,so
+sdsf d omvs,activate=service
+sdsf d omvs,asid=all
+sdsf d omvs,file
+sdsf d omvs,limits
+sdsf d omvs,pipes,all
+sdsf d omvs,usermounts
+sdsf d omvs,waiters
+* display any mount failures
+sdsf d omvs,mf
+
+* Display operator data (command characters)
+sdsf d opdata
+sdsf d opdata,mode
+sdsf d opdata,monitor,full
+
+* Display PCIE info
+sdsf d pcie
+
+* Display Parmlib Info
+sdsf d parmlib
+
+* Display PPT (program properties table)
+sdsf d ppt,all
+
+* Display Registered Products
+sdsf d prod,registered
+sdsf d prod,state
+
+* Dispaly APF List
+sdsf d prog,apf,all
+
+* Dispaly Prog defaults
+sdsf d prog,defaults
+
+* Display Dynamic System Exits
+sdsf d prog,exit
+sdsf d prog,exit,all
+
+* Display Linklist
+sdsf d prog,lnklst
+
+* Display REFRPROT Option
+sdsf d prog,refrprot
+
+* Display TrackDirLoad Info
+sdsf d prog,trackdirload
+
+* Display Active SLIP traps
+sdsf d slip
+sdsf d slip=&slipid
+
+* Display SMF
+sdsf d smf
+sdsf d smf,o
+sdsf d smf,m
+sdsf d smflim,summary
+sdsf d smflim,region
+
+* Display SMS Info
+sdsf d sms,active
+sdsf d sms,cache
+sdsf d sms,options
+sdsf d sms,pdse,hspstats
+sdsf d sms,pdse,hspstats,summary
+sdsf d sms,pdse1,hspstats
+sdsf d sms,pdse1,hspstats,summary
+sdsf v sms,pdse,monitor
+sdsf d sms,pdse,hspstats,unmanaged
+sdsf d sms,pdse1,hspstats,unmanaged
+sdsf d sms,pdse,hspstats,dsn(&userid..*)
+sdsf d sms,pdse1,hspstats,dsn(&userid..*)
+
+* Display Tape Library Info
+sdsf d sms,lib(all),detail
+sdsf d sms,lib(all),status
+sdsf d sms,lib(all),listdri
+sdsf d sms,dri(all),status
+sdsf d sms,dri(all),detail
+
+* Display Active SubSystem Interfaces (SSI)
+sdsf d ssi,list
+sdsf d ssi,all
+
+* Display system symbols
+sdsf d symbols
+
+* Display Time
+sdsf d t
+
+* Display TCPIP info
+sdsf d tcpip
+sdsf d tcpip,tcpip,netstat,all
+sdsf d tcpip,tcpip,netstat,allconn
+sdsf d tcpip,tcpip,netstat,config
+sdsf d tcpip,tcpip,netstat,conn
+sdsf d tcpip,tcpip,netstat,home
+sdsf d tcpip,tcpip,netstat,portlist
+sdsf d tcpip,tcpip,netstat,sockets
+sdsf d tcpip,tcpip,netstat,stats
+sdsf d tcpip,tcpip,netstat,ttls
+
+* Display Telnet/TN3270 info
+sdsf d tcpip,telnet
+sdsf d tcpip,telnetd,telnet,profile
+sdsf d tcpip,telnetd,telnet,inactlus
+sdsf d tcpip,telnetd,telnet,connection
+* Display Trace Options
+sdsf d trace
+
+* Display device status
+*
+sdsf d u,ctc
+sdsf d u,dasd
+**  Display ALL online DASD
+sdsf d u,dasd,online,,9999
+sdsf d u,graphic
+sdsf d u,tape
+sdsf d u,tp
+sdsf d u,ur
+sdsf d u,all
+sdsf d u,iplvol
+sdsf d u,dasd,alloc
+
+* Display UniCode services
+sdsf d uni
+sdsf d uni,service
+sdsf d uni,storage
+sdsf d uni,conversion
+sdsf d uni,normalization
+sdsf d uni,all
+
+* Display Virtual Storage Info
+sdsf d virtstor,hvshare
+sdsf d virtstor,hvcommon
+sdsf d virtstor,lfarea
+
+* Display WLM
+sdsf d wlm
+sdsf d wlm,systems
+
+* Display XCF Info
+sdsf d xcf
+
+* displays active registered elements
+sdsf d xcf,armstatus
+
+* displays coupling names & info
+sdsf d xcf,cf
+
+* displays cfrm info by name
+sdsf d xcf,cf,cfnm=&crnmname
+
+* displays transport classes defined
+sdsf d xcf,classdef
+
+* displays current xcf couple info
+sdsf d xcf,couple
+
+* displays signalling resource info
+sdsf d xcf,group
+
+* displays signalling resource info
+sdsf d xcf,localmsg
+
+* xcf signalling pathin status
+sdsf d xcf,pathin
+
+* xcf signalling pathin status
+sdsf d xcf,pathin,device=all
+
+* xcf signalling pathout status
+sdsf d xcf,pathout
+
+* xcf signalling pathout status
+sdsf d xcf,pathout,device=all
+
+* displays all policy infomation
+sdsf d xcf,policy
+
+* displays specific policy info
+sdsf d xcf,policy,type
+
+* displays all systems in sysplex
+sdsf d xcf,sysplex all
+
+* displays all structures
+sdsf d xcf,str=strm=all
+
+* displays list of cfrm policies
+sdsf d xcf,structure
+
+* Display lost connections
+sdsf d xcf,str,status=lossconn
+
+* ISKLM commands
+sdsf F ISKLMSRV,APPL='LIST -KEY'
+sdsf F ISKLMSRV,APPL='LIST -CERT'
+sdsf F ISKLMSRV,APPL='LIST -KEYSYM'
+sdsf F ISKLMSRV,APPL='LISTCERTS'
+
+* ICSF Display Commands (requires ICSF HCR77C1 FMID)
+sdsf  D ICSF,LIST
+sdsf  D ICSF,LIST,SYSPLEX=NO
+sdsf  D ICSF,LIST,SYSPLEX=YES
+sdsf  D ICSF,CARDS
+sdsf  D ICSF,KDS
+sdsf  D ICSF,MKS
+sdsf  D ICSF,OPT
+sdsf  D ICSF,REMOTE
+
+* ACF/VTAM Display Commands
+sdsf d net,vtamopts
+sdsf d net,bfruse
+sdsf d net,appls
+sdsf d net,pathtab
+sdsf d net,majnotes
+
+* Update APF List dynamically
+sdsf setprog apf,add,dsname=&dsn,volume=&vol
+
+* Replace Linklist - use some or all of these
+sdsf d prog,lnklst
+sdsf setprog lnklst define name(&newlnk) copyfrom(&oldlnk)
+sdsf setprog lnklst add name(&newlnk) dsname(&dsnadd) vol(&voladd)
+sdsf setprog lnklst delete name(&newlnk) dsname(&dsnkill)
+sdsf setprog lnklst activate name(&newlnk)
+
+* Update Dynamic LPA
+sdsf setprog lpa,add,modname=&lmod,dsname=&dsn
+sdsf setprog lpa,delete,modname=&lmod
+
+* CSSMTP Commands
+sdsf f cssmtp,display,loglevel
+sdsf f cssmtp,loglevel,level=&loglevel
+
+* Health Check Display
+sdsf F HZSPROC,DISPLAY STATUS
+
+* System Rexx
+sdsf f axr,sysrexx,st d r
+
+
+* zFS Commands
+sdsf f zfs&sysid,query,all
+sdsf f zfs&sysid,query,ctkc
+sdsf f zfs&sysid,query,dataset
+sdsf f zfs&sysid,query,file
+sdsf f zfs&sysid,query,filesets
+sdsf f zfs&sysid,query,iobydasd
+sdsf f zfs&sysid,query,knpfs
+sdsf f zfs&sysid,query,level
+sdsf f zfs&sysid,query,lfs
+sdsf f zfs&sysid,query,lock
+sdsf f zfs&sysid,query,settings
+sdsf f zfs&sysid,query,status
+sdsf f zfs&sysid,query,stkm
+sdsf f zfs&sysid,query,storage
+sdsf f zfs&sysid,query,svi
+sdsf f zfs&sysid,query,threads
+sdsf f zfs&sysid,query,vm

@@ -1,0 +1,35 @@
+/* --------------------  rexx procedure  -------------------- *
+ | Name:      RUNCLOG                                         |
+ |                                                            |
+ | Function:  Display a dataset list of all RUNC LOG          |
+ |            datasets                                        |
+ |                                                            |
+ | Syntax:    %runclog                                        |
+ |                                                            |
+ | Author:    Lionel B. Dyck                                  |
+ |                                                            |
+ | History:  (most recent on top)                             |
+ |            02/21/17 - Issue message if no log datasets     |
+ |            01/25/17 - Creation                             |
+ |                                                            |
+ * ---------------------------------------------------------- */
+
+ ldsn = 'RUNC.D*'
+ if sysvar('syspref') = null
+    then logdsn = sysvar('sysuid')'.'ldsn
+    else logdsn = sysvar('syspref')'.'ldsn
+
+/* ------------------------------------------------- *
+ * Now display a list of the received datasets using *
+ * ISPF LMM services (ISPF 3.4)                      *
+ * ------------------------------------------------- */
+ Address ISPExec
+ 'LMDINIT LISTID(LISTID) LEVEL('logdsn')'
+ 'LMDDISP LISTID('ListId') Confirm(Yes)',
+         'View(Volume)'
+ xrc = rc
+ 'LMDFREE LISTID('ListId')'
+ if xrc = 0 then exit
+ zedsmsg = zerrsm
+ zedlmsg = zerrlm
+ 'Setmsg msg(isrz001)'

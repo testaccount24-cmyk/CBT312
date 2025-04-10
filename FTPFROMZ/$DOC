@@ -1,0 +1,35 @@
+This dataset contains the REXX Application FTPFromZ. The contents are:
+
+*********************************************************************
+*** Important: If you received this from from a site other than   ***
+***            http://www.lbdsoftware.com then you should check   ***
+***            there for a possible more current version.         ***
+*********************************************************************
+
+Installation Step 1:
+    To execute the RECEIVE member issue
+       "TSO EXEC 'hlq.pds-dsname(RECEIVE)' EXEC"
+    This will create the rexx library and place you in ISPF Browse on
+    some key members.
+Installation Step 2.
+    Copy the FTPFROMZ exec into a library in your SYSPROC or SYSEXEC
+    concatenation and try it out.
+
+Updates can be found at http://www.lbdsoftware.com
+
+$DOC     what you are reading
+CHANGES  History of changes
+EXEC     The rexx execs in TSO Transmit (IDTF) format
+LICENSE  The license under which this package is distributed
+RECEIVE  A simple exec to receive the EXEC member
+USRGUIDE A simple users guide
+
+Comments, suggestions, and complaints should be directed to the author
+at:
+
+  Lionel B. Dyck
+  Kaiser Permanente Information Technology
+  25 N. Via Monte Ave.
+  Walnut Creek, CA 94598
+  (925) 926-5332
+  Internet: lionel.b.dyck@kp.org

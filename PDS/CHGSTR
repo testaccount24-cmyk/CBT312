@@ -1,0 +1,44 @@
+  /* --------------------  rexx procedure  -------------------- *
+  | Name:      CHGSTR                                          |
+  |                                                            |
+  | Function:  Replace a needle in a haystack in all locations |
+  |                                                            |
+  |            Based upon the CHANGESTR function in ANSI REXX  |
+  |                                                            |
+  | Syntax:    x = chgstr(needle,haystack,new_needle)          |
+  |                                                            |
+  | Return:    update haystack                                 |
+  |            4 - all parms missing                           |
+  |            5 - haystack and new_needle missing             |
+  |            6 - new_needle missing                          |
+  |            8 - needle not found in haystack                |
+  |                                                            |
+  | Author:    Lionel B. Dyck                                  |
+  |                                                            |
+  | History:  (most recent on top)                             |
+  |            2022/10/12 LBD - Process all occurrences of     |
+  |                             of needle and retain spacing   |
+  |            2022/10/12 LBD - Creation after inspiration     |
+  |                             by John Kalinich               |
+  |                                                            |
+  * ---------------------------------------------------------- */
+  needle = arg(1)
+  haystack = arg(2)
+  new_needle = arg(3)
+
+  parse value '' with null
+
+  if needle     = null then return 4
+  if haystack   = null then return 5
+  if new_needle = null then return 6
+
+  if pos(needle,haystack) = 0 then return 8
+
+  do forever
+    p = pos(needle,haystack)
+    if p = 0 then return haystack
+    l = length(needle)
+    lh = left(haystack,p-1)
+    lr = substr(haystack,p+l)
+    haystack = lh''new_needle''lr
+  end

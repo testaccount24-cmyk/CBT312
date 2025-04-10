@@ -1,0 +1,430 @@
+        /* --------------------  rexx procedure  -------------------- *
+         * Name:      ONCALL                                          *
+         *                                                            *
+         * Function:  Do On Call Scheduling.                          *
+         *                                                            *
+         * Syntax:    %oncall                                         *
+         *                                                            *
+         * Author:    Lionel B. Dyck                                  *
+         *            Kaiser Permanente Information Technology        *
+         *            Walnut Creek, CA 94598                          *
+         *            (925) 926-5332                                  *
+         *            Internet: lionel.b.dyck@kp.org                  *
+         *                                                            *
+         * Dependency: XMITIP must be installed to use the e-mail     *
+         *             option                                         *
+         *                                                            *
+         * History:                                                   *
+         *            12/10/03 - Change to support PROFILE NOPREFIX   *
+         *                     - Add ORGANIZER tag to ICS file        *
+         *                     - Add CLASS of ONCALL to ICS file      *
+         *                     - Corrected the start/end times for ICS*
+         *            12/05/03 - Add option 4                         *
+         *                     - Correct missing first ical entry     *
+         *                       for each user                        *
+         *                     - Change multiple day ical format      *
+         *                       using RRULE statement                *
+         *            12/04/03 - Clean up e-mails and processing      *
+         *            12/03/03 - Add processing option 3              *
+         *                     - Change report to single line for     *
+         *                       each entry with tabs                 *
+         *            12/02/03 - Correction for e-mail contents       *
+         *            10/10/03 - Add phone/cell/home/pager and debug  *
+         *            09/05/03 - Add cancel option on table display   *
+         *            09/04/03 - Add personal schedule in e-mail      *
+         *            09/03/03 - Enhancements (major)                 *
+         *            09/02/03 - Creation                             *
+         *                                                            *
+         * ---------------------------------------------------------- *
+         * Copyright 2003 by Lionel B. Dyck                           *
+         * ---------------------------------------------------------- */
+         arg options
+
+        /* ------------------------------------------- *
+         * Make sure we are in the ISPF Applid We Want *
+         * ------------------------------------------- */
+         Address ISPExec
+         "Vget (zapplid)"
+         if zapplid <> "ONCS" then do
+            "Select CMD(%"sysvar('sysicmd') options ") Newappl(ONCS)" ,
+                "passlib scrname(OnCall)"
+            exit 0
+            end
+
+         "Control Errors Return"
+
+        /* -------------------------------- *
+         * Test for DEBUG in passed options *
+         * -------------------------------- */
+         if wordpos(translate(options),"DEBUG") > 0 then trace "?i"
+
+        /* ---------------------------------------- *
+         * Display initial panel for info on OnCall *
+         * ---------------------------------------- */
+         Start:
+         Do Forever
+            "Display Panel(oncall0)"
+            frc = rc
+            "Vput (ocgroup ocgi octbl ocb ocr" ,
+                  "ocgmail) Profile"
+            if frc = 0 then call do_it
+            if frc > 0 then exit
+            end
+
+        /* --------------------------------------- *
+         * Now Create the table and setup defaults *
+         * --------------------------------------- */
+         Do_It:
+         octable = ocgi
+         parse value "" with null ocname ocmail out. names ,
+                             ocpo ocpc ocpg ocph ocr3
+         mails      = 0
+         tab        = x2c(05)
+         ocdd       = "OC"random(9999)
+         name_max   = 0
+         mail_max   = 0
+         cell_max   = 0
+         pager_max  = 0
+         office_max = 0
+
+         "Vget (zuser zprefix)"
+         if zprefix = zuser
+            then  hlq = zuser
+            else  hlq = zprefix"."zuser
+
+         if translate(ocb) = "YES" then ocbkup = 1
+                                   else ocbkup = 0
+
+         if sysdsn(octbl) <> "OK" then do
+              Address TSO
+                "Alloc f(octable) ds("octbl") new spa(15,15) tr",
+                      "recfm(f b) lrecl(80) blksize(23440) reuse" ,
+                      "dir(21)"
+                Address ISPExec
+                "Libdef OCTABLE Dataset ID("octbl")"
+                "TBCreate" octable "names(ocseq ocname ocmail" ,
+                                         "ocpo ocpc ocpg ocph)" ,
+                           "write replace library(octable)"
+                do i = 1 to 10
+                   ocname = "replace"i "or delete"
+                   ocseq = i
+                   "TBAdd" octable
+                   end
+                "TBsort" octable "Fields(ocseq,N,A)"
+                end
+          else do
+               Address TSO,
+                 "Alloc f(octable) ds("octbl") shr reuse"
+               "Libdef OCTABLE Dataset ID("octbl")"
+               end
+         "TBOpen" octable "write Library(octable)"
+         trc = rc
+         if trc > 11 then do
+            "TBClose" octable "Library(octable)"
+            "TBOpen" octable "write Library(octable)"
+            end
+         if trc = 8 then do
+            "TBCreate" octable "names(ocseq ocname ocmail" ,
+                                     "ocpo ocpc ocpg ocph)" ,
+                       "write replace library(octable)"
+            "TBOpen" octable "write Library(octable)"
+            "TBTop" octable
+            do i = 1 to 2
+               ocname = "replace"i "or delete"
+               ocseq = i
+               "TBAdd" octable
+               end
+            "TBsort" octable "Fields(ocseq,N,A)"
+            end
+
+        /* --------------------- *
+         * Now Display the Panel *
+         * --------------------- */
+         "TBTop" octable
+         drc = 0
+         do forever
+            if drc = 0 then do
+               "TBsort" octable "Fields(ocseq,N,A)"
+               "TBDispl" octable "Panel(oncall)"
+              end
+            else "TBDispl" octable
+            drc = rc
+            if word(translate(zcmd),1) = "SORT" then do
+               up = translate(zcmd)
+               if word(up,2) = "NAME" then
+                  "TBSort" octable "Fields(ocname,C,A)"
+               "TBTop" octable
+               trc = 0
+               tctr = 1
+               do forever
+                  "TBSkip" octable
+                  if rc > 0 then leave
+                  ocseq = tctr
+                  "TBPut" octable
+                  tctr = tctr + 1
+                  end
+               end
+            if translate(zcmd) = "CANCEL" then do
+               zcmd = null
+               zedsmsg = "Cancelled"
+               zedlmsg = "Oncall scheduling cancelled per your" ,
+                         "request."
+               "Setmsg msg(isrz001)"
+               return
+               end
+            if drc > 4 then leave
+            select
+            When zsel = "D" then "TBDelete" octable
+            When zsel = "I" then do
+               parse value "" with ocname ocmail ocpo ocpc ,
+                                   ocpg ocph
+               "TBAdd" octable
+               end
+            Otherwise "TBPut" octable
+            end
+            zsel = null
+            end
+
+        /* --------------------- *
+         * Now do the scheduling *
+         * --------------------- */
+         "TBTop" octable
+         c = 0
+         do forever
+         "TBSkip" octable
+           if rc > 0 then leave
+           c = c + 1
+           ocname = translate(ocname,"_"," ")
+           victim.c = left(ocname,20) ocmail ,
+                      "O:"ocpo "C:"ocpc "P:"ocpg "H:"ocph
+           name_max   = max(name_max,length(ocname))
+           mail_max   = max(mail_max,length(ocmail))
+           office_max = max(office_max,length(ocpo))
+           cell_max   = max(cell_max,length(ocpc))
+           pager_max  = max(pager_max,length(ocpg))
+           end
+         victims = c
+
+         open  = date('b',ocdate,'u')
+         close = date('b',open+(ocdur*occyc),'b')
+         open  = open - occyc
+         c = 0
+         count = 0
+         limit = ocdur * victims
+         do i = 1 to ocdur
+            do v = 1 to victims
+               count = count + 1
+               if count > ocdur then leave i
+               if ocbkup = 1 then do
+                  /* Backup Cycle */
+                  start = date('u',open,'b')
+                  stop  = date('u',open+occyc,'b')
+                  open  = date('b',start,'u')
+                  type  = left("Backup",9)
+                  c = c + 1
+                  out.c = start stop  type victim.v
+                  call do_victim out.c
+                  end
+               /* Primary Cycle */
+               start = date('u',open+occyc,'b')
+               stop  = date('u',open+occyc+occyc,'b')
+               open  = date('b',start,'u')
+               type  = left("Primary",9)
+               c = c + 1
+               out.c = start stop  type victim.v
+               call do_victim out.c
+               end
+            end
+          ocstop = stop
+          out.0 = c
+
+        /* ------------------- *
+         * Generate the Report *
+         * ------------------- */
+         ocrpt = "'"hlq".oncall.d"date('j')".report'"
+         call msg "off"
+         Address TSO
+         "Delete" ocrpt
+         "Alloc f("ocdd") new spa(15,15) tr ds("ocrpt")",
+               "recfm(v b) lrecl(150) blksize(0)"
+         h.1 = "Oncall Report for" ocgroup "From" ocdate "To" ocstop
+         h.2 = left("Begin",8)""tab""left("End",8)""tab ,
+               || left("Type",7)""tab ,
+               || left("Name",name_max)""tab ,
+               || left("E-Mail",mail_max)""tab ,
+               || left("Office",office_max)""tab ,
+               || left("Cell",cell_max)""tab ,
+               || left("Pager",pager_max)""tab"Home"
+         h.3 = " "
+         drop new.
+         newc = 0
+         do i = 1 to out.0
+            parse value out.i with b s t n e ,
+                  "O:"office "C:"cell "P:"pager "H:"home
+            n = translate(n," ","_")
+            newc = newc + 1
+            new.newc = left(b,8)""tab ,
+                       || left(s,8)""tab ,
+                       || left(t,7)""tab ,
+                       || left(n,name_max)""tab ,
+                       || left(e,mail_max)""tab ,
+                       || left(office,office_max)""tab ,
+                       || left(cell,cell_max)""tab ,
+                       || left(pager,pager_max)""tab ,
+                       || home
+            end
+         "Execio * diskw" ocdd "(stem h."
+         "Execio * diskw" ocdd "(finis stem new."
+         "Free f("ocdd")"
+         Address ISPExec "Browse dataset("ocrpt")"
+
+        /* -------------------------------------- *
+         * Report Processing                      *
+         *    1: Display report only              *
+         *    2: E-Mail report and calendar files *
+         * -------------------------------------- */
+        if ocr > 1 then do
+           /* ----------------------------- *
+            * Now report the calendar files *
+            * ----------------------------- */
+            mail. = null
+            do i = 1 to words(names)
+               name = word(names,i)
+               c = out.name
+               do cx = 1 to c
+                  temp.cx = out.name.ic.cx
+                  end
+               temp.cx = "END:VCALENDAR"
+               cx = cx + 1
+               temp.cx = "  "
+
+              /* ---------------------------- *
+               * Write out the iCalendar file *
+               * ---------------------------- */
+               ocics = "'"hlq".oncall.d"date('j')".ics'"
+               "Alloc f("ocdd") spa(15,15) tr ds("ocics")" ,
+                  "Recfm(v b) lrecl(150) blksize(23440)"
+               "Execio * diskw" ocdd "(finis stem temp."
+               drop temp.
+               "Free  f("ocdd")"
+
+              /* ------------------------------------------ *
+               * Now write out the individualized schedules *
+               * ------------------------------------------ */
+               uname = translate(strip(name)," ","_")
+               temp.1 = "Enclosed is your personal oncall schedule",
+                        "generated for" strip(uname)'.'
+               temp.2 = " "
+               temp.3 = "Group Oncall Schedule for" ocgroup ,
+                        "From" ocdate "To" ocstop
+               temp.4 = left("Begin",8) left("End",8) left("Type",9) ,
+                     left("Name",20) "E-Mail"
+               temp.5 = " "
+               ocuc = 5
+               tname = translate(uname)
+               tname = translate(tname,"_"," ")
+               do ocu = 1 to out.0
+                  if pos(tname,translate(out.ocu)) = 0 then iterate
+                  temp.ocuc = translate(out.ocu," ","_")
+                  ocuc = ocuc + 1
+                  end
+               ocusched = "'"hlq"."ocdd".temp'"
+               "Alloc f("ocdd") spa(15,15) tr ds("ocusched")" ,
+                  "Recfm(v b) lrecl(150) blksize(23440)"
+               "Execio * diskw" ocdd "(finis stem temp."
+               drop temp.
+               "Free  f("ocdd")"
+
+              /* ----------------------------------------- *
+               * Now e-mail the schedule and calendar file *
+               * ----------------------------------------- */
+               if ocr = 3 then do
+                  out.name.email = ocgmail
+                  if ocr3 <> 1 then call do_xmit
+                  ocr3 = 1
+                  end
+               else call do_xmit
+               "Delete" ocics
+               "Delete" ocusched
+               end
+            end
+
+        /* ------------------ *
+         * Close out and exit *
+         * ------------------ */
+         Address ISPExec
+         "TBSave" octable "Library(octable)"
+         "Vput (ocdate ocdur occyc) profile"
+         "TBEnd" octable
+         Address TSO "Free f(octable)"
+         zedsmsg = " "
+         if ocr > 1 then m = "with" mails "e-mails generated."
+                    else m = null
+         zedlmsg = "Completed processing the oncall schedule" m
+         "Setmsg msg(isrz001)"
+         return
+
+        /* -------------------------------- *
+         * Create the e-mail and ical stems *
+         * -------------------------------- */
+         Do_Victim:
+         parse value out.c with start stop type name mail details
+         icstart = date('s',start,'u')
+         icend   = date('b',icstart,'s')
+         icend   = date('s',icend+1,'b')
+         if pos(name,names) = 0 then do
+            names = strip(name names)
+            out.name.email = mail
+            end
+         if out.name = null then do
+            out.name = 0
+            call add_victim "BEGIN:VCALENDAR"
+            call add_victim "METHOD:Text"
+            call add_victim "VERSION:2.0"
+            call add_victim "PRODID:-//ONCALL/NONSGML OnCall//EN"
+            end
+          call add_victim "BEGIN:VEVENT"
+          call add_victim "ORGANIZER:MAILTO:"ocgmail
+          call add_victim "DTSTART:"icstart"T080000Z"
+          call add_victim "DTEND:"icend"T080000Z"
+          call add_victim "RRULE:FREQ=DAILY;COUNT="occyc
+          /* call add_victim "RRULE:D1 #"occyc */
+          f = date('u',icstart,'s')
+          t = date('u',date('b',start,'u')+occyc,'b')
+          call add_victim "SUMMARY:"type" OnCall" f "to" t
+          call add_victim "DESCRIPTION:Oncall Duty:" type
+          call add_victim "LOCATION:Anywhere you are"
+          call add_victim "CLASS:ONCALL"
+          call add_victim "END:VEVENT"
+          return
+
+        /* --------------------------------------- *
+         * Call %XMITIP Command to send the e-mail *
+         * --------------------------------------- */
+         Do_Xmit:
+         if ocr = 3
+            then xm3 = "file ("ocrpt") format txt" ,
+                       "filename oncall.txt" ,
+                       "msgt 'OnCall Report for" ocgroup"'"
+            else xm3 = "file ("ocrpt ocics") format (txt ical)" ,
+                       "filename (Oncall.txt Oncall.ics)" ,
+                       "msgds" ocusched
+         if ocr = 4 then
+            if translate(out.name.email) <> translate(ocgmail)
+               then return
+         "%xmitip" out.name.email "Subject 'OnCall Schedule from" ,
+          ocdate "to" ocstop" for" ocgroup "' from" ocgmail ,
+          "Noconfirm" xm3
+          mails = mails + 1
+          return
+
+        /* -------------------- *
+         * Add record to output *
+         * -------------------- */
+          Add_Victim:
+          parse arg opt
+          cnt = out.name
+          cnt = cnt + 1
+          out.name.ic.cnt = opt
+          out.name = cnt
+          return

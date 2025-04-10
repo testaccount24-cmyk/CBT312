@@ -1,0 +1,90 @@
+/* --------------------  rexx procedure  -------------------- *
+ * Name:      OMVSPAXR                                        *
+ *                                                            *
+ * Function:  Restore an OMVS directory, with subdirectories, *
+ *            from a z/OS dataset. Both will be prompted for  *
+ *            using an ISPF panel.                            *
+ *                                                            *
+ *            The restore can be made in any directory        *
+ *            provided it already exists.                     *
+ *                                                            *
+ * Syntax:    %OMVSPAXR                                       *
+ *                                                            *
+ * Dependencies:                                              *
+ *                                                            *
+ *            1. STEMVIEW for viewing the results of the      *
+ *               backup                                       *
+ *                                                            *
+ * Author:    Lionel B. Dyck                                  *
+ *                                                            *
+ * History:                                                   *
+ *            07/06/16 - Conversion to use PAX from Tar       *
+ *            07/05/16 - Creation                             *
+ *                                                            *
+ * ---------------------------------------------------------- */
+
+/* --------------- *
+ * Define defaults *
+ * --------------- */
+ null = ''
+ Address ISPExec
+
+/* ------------------------------- *
+ * Get the users home directory to *
+ * prime the restore panel.        *
+ * ------------------------------- */
+ cmd = 'pwd'
+ rc = bpxwunix(cmd,,stdout.,stderr.)
+ omvsdir = strip(stdout.1)
+
+/* ------------------------------------ *
+ * Display the panel prompting for info *
+ * ------------------------------------ */
+ do forever
+    "Display Panel(OMVSPAXR)"
+    if rc >4 then leave
+    call do_it
+    end
+ Exit 0
+
+Do_It:
+/* ------------- *
+ * Test for info *
+ * ------------- */
+ zedsmsg = null
+ if zobkdsn /= null then
+    if 'OK' /= sysdsn(zobkdsn) then do
+       zedsmsg = 'Error'
+       zedlmsg = zobkdsn 'does not exist.' sysdsn(zobkdsn)
+      'setmsg msg(isrz001)'
+      end
+ 'vput (zobkdsn) profile'
+
+/* ----------------------------------------------- *
+ * Test to validate that the omvs directory exists *
+ * ----------------------------------------------- */
+ cmd = 'ls -la' omvsdir
+ rc = bpxwunix(cmd,,stdout.,stderr.)
+ if rc > 0 then do
+    zedsmsg = 'Error'
+    zedlmsg = stderr.1
+    'setmsg msg(isrz001)'
+    return
+    end
+
+ if zedsmsg = null then do
+    /* Comment Start
+    cmd = 'cd' omvsdir '; tar -xvpf "//'zobkdsn'" .';
+       Comment End */
+    cmd = 'cd' omvsdir '; pax -rvf "//'zobkdsn'" .';
+    x = bpxwunix(cmd,,stdout.,stderr.)
+    if stdout.0 > 0 then
+       CALL stemview 'Browse','stdout.',,,"Restore"
+   /* ----------------------------------------------- *
+    * pax -r with -v will display the files in stderr *
+    * ----------------------------------------------- */
+    if stderr.0 > 0 then
+       CALL stemview 'Browse','stderr.',,,"Restore"
+    end
+
+ return

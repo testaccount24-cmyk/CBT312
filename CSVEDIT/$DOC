@@ -1,0 +1,33 @@
+This data set contains a tool called CSVEDIT - an ISPF Edit Macro designed
+to convert the current EDIT data set into a comma separated value (csv)
+data set which can then be imported into a spreadsheet or database.
+
+   **** This code has no warranty - use it at your own risk ****
+
+For a change history see the REXX Exec CSVEDIT.
+
+The contents of this data set are:
+
+   $DOC     What you are now reading
+   EXEC     TSO Transmit format of the REXX library
+   PANELS   TSO Transmit formato of the Panels library
+   RECEIVE  REXX to explode EXEC and PANELS back into real data sets
+
+To install:
+   1. unzip the distribution file and upload the csvedit.xmit file
+      in binary into a RECFM=FB LRECL=80 data set
+   2. execute the RECEIVE member of this data set
+   3. copy the rexx library into a library in your SYSEXEC
+      concatentation
+   4. copy the panels library into a library in your ISPPLIB
+      concatentation
+   5. read the users guide distributed with the zip file.
+
+Please report any problems, suggestions, etc. to the author:
+
+        Lionel B. Dyck
+        Kaiser Permanente Information Technology
+        Walnut Creek, CA 94598
+        (925) 926-5332
+        Internet: lionel.b.dyck@kp.org
+

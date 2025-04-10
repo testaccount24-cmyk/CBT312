@@ -1,0 +1,64 @@
+)Attr Default(%+_)
+   # type(ps)
+   $ type( input) intens(high) caps(on ) just(left )
+   ! type(text) intens(high) color(yellow)
+   ~ type(text) intens(high) color(turq  ) hilite(reverse)
+   @ type(output) intens(high) color(turq  ) hilite(reverse)
+   _ type(input) caps(off) just(left) hilite(uscore) intens(low)
+)Body  Expand(\\)
+%\-\-~DSFS Admin Menu@ver%-\-\
+%Option ===>_zcmd
++
+!*%1#abort             +Causes DSFS to Dump and Restart
+!*%2#dump              +Dumps DSFS including the z/OS Unix address space
+ +                      and associated address spaces
+!*%3#fsinfo            +Display detailed information about the DSFS Utility
+ +                      file system
+!*%4#query             +Displays All DSFS counters or values
+!*%5#reset             +Resets all DSFS counters to zero
+ % 6#dsadm commands    +dsadm commands (admin and user)
+ % 7#user commands     +dsadm commands (user only)
+ % 8#level             +Display dsfs maintenance level
++
+         !*+These actions require SDSF Operator Command capability.
+ +
+)Init
+  &hcon = &Z
+  .cursor = zcmd
+  .help = dsfstutr
+)ReInit
+)Proc
+ &resp = .resp
+*rexx(* zcmd msg csr resp hcon)
+  parse value '' with null msg csr
+  if resp /= 'END' then do
+    if zcmd /= null then do
+      if datatype(zcmd) /= 'NUM' then do
+        msg = 'Invalid command entered - must be numeric from 1 to 8'
+        csr = 'zcmd'
+      end
+      else if zcmd < 1 | zcmd > 8 then do
+        msg = 'Invalid command entered - must be within range of 1 to 8'
+        csr = 'zcmd'
+      end
+    end
+  end
+*endrexx
+ if (&msg NE &Z)
+     &zerrhm   = 'dsfstutr'
+     &zerralrm = 'NO'
+     &zerrtp   = 'Notify'
+     &zerrsm  = &Z
+     &zerrlm  = &msg
+     .cursor = &csr
+     .MSG = ISRZ002
+)PNTS
+ FIELD(ZPS00001) VAR(RESULT) VAL('1')
+ FIELD(ZPS00002) VAR(RESULT) VAL('2')
+ FIELD(ZPS00003) VAR(RESULT) VAL('3')
+ FIELD(ZPS00004) VAR(RESULT) VAL('4')
+ FIELD(ZPS00005) VAR(RESULT) VAL('5')
+ FIELD(ZPS00006) VAR(RESULT) VAL('6')
+ FIELD(ZPS00007) VAR(RESULT) VAL('7')
+ FIELD(ZPS00008) VAR(RESULT) VAL('8')
+)End

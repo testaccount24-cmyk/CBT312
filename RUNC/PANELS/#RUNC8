@@ -1,0 +1,33 @@
+)ATTR DEFAULT(@$_)
+   @   TYPE(TEXT)  INTENS(HIGH)
+   $   TYPE(TEXT)  INTENS(low) color(green)
+   # type(output) intens(high) caps(off) just(left) color(green)
+   _   TYPE(INPUT) INTENS(HIGH) CAPS(ON) JUST(LEFT) HILITE(USCORE)
+)BODY EXPAND(\\)
+@Tutorial$-\-\-(@RUNC - Edit Macro$)-\-\-@Tutorial
+@Command ===>_ZCMD
+$                                                                              @
+$Special Symbolics
+$
+$ @&&DATE    #DATE                        @&&SDATE     #SDATE                  @
+$ @&&DD      #DD                          @&&SMFID     #SMFID                  @
+$ @&&DOY     #DOY                         @&&SYSNAME   #SYSNAME@               @
+$ @&&EDATE   #EDATE                       @&&SYSID     #SYSID                  @
+$ @&&HHMM    #HHMM                        @&&SYSPLEX   #SYSPLEX                @
+$ @&&JDATE   #JDATE                       @&&SYSPREF   #SYSPREF                @
+$ @&&JULIAN  #JULIAN                      @&&SYSSMFID  #SYSSMFID               @
+$ @&&LPAR    #LPAR                        @&&SYSUID    #SYSUID                 @
+$ @&&MM      #MM                          @&&UDATE     #UDATE                  @
+$ @&&MONTH   #MONTH                       @&&USERID    #USERID                 @
+$ @&&ODATE   #ODATE                       @&&USERIDL   #USERIDL                @
+$ @&&PREFIX  #PREFIX                      @&&WEEKDAY   #WEEKDAY                @
+$ @&&RDSN    #RDSN                        @&&YY        #YY                     @
+$ @&&RMBR    #RMBR                        @&&YYYY      #YYYY                   @
+$ @&&RMEM    #RMEM                                                             @
+$                                                                              @
+$                                                                              @
+$ \ \ (press@ENTER$to continue) \ \
+)PROC
+  &ZUP     = #RUNC7
+  &ZCONT   = #RUNC9
+)END

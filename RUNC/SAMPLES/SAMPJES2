@@ -1,0 +1,43 @@
+* Sample JES2 operator commands
+*
+** Prefix with either EJES or SDSF depending on which you use
+*
+** If your shop uses ejes invoke RUNC -2 on the following command
+*  edit c sdsf ejes all
+*
+
+*  Display JES2 job definitions
+sdsf $djobdef
+
+*  Display all jobs which occupy more than 5% of the spool
+sdsf $djq,spl=(%>5)
+
+*  Display all jobs on the print/punch queue more than 5 days old
+sdsf $djq,a>5,q=ppu
+
+*  Display all TSUs on the print/punch queue
+sdsf $djq,q=ppu,type=tsu
+
+*  Display spool percent occupied by the named job
+sdsf $djq'&jobname',spl
+
+*  Display userid associated with jobs on print/punch queue
+sdsf $djq,q=ppu,userid
+
+*  Purges all jobs on the print/punch queue more than 5 days old
+sdsf $pjq,a>5,q=ppu
+
+*  Purge all TSUs on the print/punch queue
+sdsf $pjq,q=ppu,type=tsu
+
+*  Displays all jobs, including TSU and STC
+sdsf $da,x
+
+*  Purge JOB number nnnnn
+sdsf $pj&jobnum
+
+*  Purge STC number nnnnn
+sdsf $ps&jobnum
+
+*  Purge TSU number nnnnn
+sdsf $pt&jobnum

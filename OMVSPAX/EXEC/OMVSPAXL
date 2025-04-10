@@ -1,0 +1,63 @@
+/* --------------------  rexx procedure  -------------------- *
+ * Name:      OMVSPAXL                                        *
+ *                                                            *
+ * Function:  List the pax information for a z/OS pax backup  *
+ *            dataset.                                        *
+ *                                                            *
+ * Syntax:    %OMVSPAXL                                       *
+ *                                                            *
+ * Dependencies:                                              *
+ *                                                            *
+ *            1. STEMVIEW for viewing the results of the      *
+ *               backup                                       *
+ *                                                            *
+ * Author:    Lionel B. Dyck                                  *
+ *                                                            *
+ * History:                                                   *
+ *            07/06/16 - Converted from tar to pax            *
+ *            07/05/16 - Creation                             *
+ *                                                            *
+ * ---------------------------------------------------------- */
+
+/* --------------- *
+ * Define defaults *
+ * --------------- */
+ null = ''
+ Address ISPExec
+
+/* ------------------------------------ *
+ * Display the panel prompting for info *
+ * ------------------------------------ */
+ do forever
+    "Display Panel(OMVSPAXL)"
+    if rc >4 then leave
+    call do_it
+    end
+ Exit 0
+
+Do_It:
+/* ------------- *
+ * Test for info *
+ * ------------- */
+ zedsmsg = null
+ if zobkdsn /= null then
+    if 'OK' /= sysdsn(zobkdsn) then do
+       zedsmsg = 'Error'
+       zedlmsg = zobkdsn 'does not exist.' sysdsn(zobkdsn)
+      'setmsg msg(isrz001)'
+      end
+ 'vput (zobkdsn) profile'
+
+ if zedsmsg = null then do
+    /* Comment Start
+    cmd = 'tar -tvf "//'zobkdsn'"'
+       Comment End */
+    cmd = 'pax -vf "//'zobkdsn'"'
+    x = bpxwunix(cmd,,stdout.,stderr.)
+    if stdout.0 > 0 then
+       CALL stemview 'Browse','stdout.',,,"pax List"
+    if stderr.0 > 1 then
+       CALL stemview 'Browse','stderr.',,,"pax List stderr"
+    end
+
+ return

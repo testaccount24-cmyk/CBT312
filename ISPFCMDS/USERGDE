@@ -1,0 +1,73 @@
+                        Users Guide for ISPFCMDS
+                              Version 1.01
+                              May 21, 2003
+                         Author: Lionel B. Dyck
+                          Lionel.B.Dyck@kp.org
+
+Overview
+
+ISPFCMDS is a utility ISPF command that eases the task of adding
+installation or user commands to an active ISPF command table. This
+can eliminaate the requirement to customize the IBM provided ISPCMDS
+command table or to create elaborate Site or User ISPF command tables.
+
+Syntax
+
+The syntax for calling ISPFCMDS is:
+
+   %ISPFCMDS table verb truncation action
+
+Where:
+
+  table is USER to add the command to the User ISPF Command table
+           SITE to add the command to the Site ISPF Command table
+           ISPF to add the command to the ISPCMDS ISPF Command table
+                note that this option is not recommended
+           * to add the command to one of the following tables
+             in this order:
+             1) USER
+             2) SITE
+             3) the active Application command table if there is one
+             4) ISPCMDS
+
+  verb  is the name of the command to add to the table. This must
+        be from 1 to 8 alphanumeric characters.
+
+  truncation is the number of characters which the command can be
+        abbreviated or 0 to indicate no abbreviation is allowed.
+
+  action is a valid ISPF Select command
+
+Notes:
+
+  1. If the requested command already exists in the table then
+     the command will be replaced.
+  2. Syntax and error messages will be generated as appropriate.
+  3. This command must be executed under ISPF.
+  4. Some installations will define in the ISPF configuration a User
+     command table prefix but not create a User command table. It is
+     recommended that a User command table be created with zero or a
+     limited number of entries and placed in the same library as the
+     Site command table as that will allow this tool to dynamically
+     update the User table.
+
+Sample usage:
+
+   /* rexx */
+
+   /* set a short alias of DD for DDLIST/ISRDDN */
+   "%ispfcmds user dd 0 alias ddlist"
+
+   /* assumes that Lionel Dyck's Fastpath command has been
+      installed in your SYSEXEC or SYSPROC library concatenation */
+   "%ispfcmds user fastpath 0 select cmd(%fastpath)"
+
+   /* assumes that Doug Nadel's TASID has been installed into
+      a STEPLIB or your Linklist */
+   "%ispfcmds user tasid 2 select cmd(tasid)"
+
+   /* assumes that the IBM supplied ISRBPDF and ISREPDF
+      have been copied as BPDF and EPDF into your SYSEXEC or
+      SYSPROC library concatenation */
+   "%ispfcmds user br 0 select cmd(%bpdf &zparm)"
+   "%ispfcmds user ed 0 select cmd(%epdf &zparm)"

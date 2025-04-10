@@ -1,0 +1,17 @@
+)Attr Default(%+_)
+   $ type( input) intens(high) caps(off) just(left ) hilite(uscore)
+   @ type( input) intens(high) caps(on ) just(left ) hilite(uscore)
+   ~ type(text) intens(high) color(green ) hilite(reverse)
+)Body  Expand(\\)
+%-\-\-~OMVS Directory Backup%-\-\-
+%Command ===>_zcmd
+%
+%OMVS Directory/File:$omvsdir                                                 +
+%z/OS Backup Dataset:@zobkdsn                                       +
++
++Specify the OMVS directory to be backed up using PAX to the
++z/OS dataset (which must not currently exist).
+)Init
+)Proc
+ ver (&zobkdsn,nb,dsname)
+)End

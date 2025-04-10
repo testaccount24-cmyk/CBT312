@@ -1,0 +1,15 @@
+/* --------------------  rexx procedure  -------------------- *
+ * Name:      OMVSPAX                                         *
+ *                                                            *
+ * Function:  Display the OMVSPAX Menu                        *
+ *                                                            *
+ * Syntax:    %omvspax                                        *
+ *                                                            *
+ * Author:    Lionel B. Dyck                                  *
+ *                                                            *
+ * History:                                                   *
+ *            07/27/16 - Creation                             *
+ *                                                            *
+ * ---------------------------------------------------------- */
+ Address ISPExec
+ 'Select Panel(omvspax)'

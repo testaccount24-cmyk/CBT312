@@ -1,0 +1,173 @@
+        /* ---------------------  REXX procedure  ------------------- *
+         * Name:      DUMPLOGX                                        *
+         *                                                            *
+         * Function:  Check that all data sets in the mvs.dumplog are *
+         *            still cataloged and if not remove that entry.   *
+         *                                                            *
+         *            Also, check catalog for all mvs.dump data sets  *
+         *            and delete them if they are not in the          *
+         *            mvs.dumplog.  *                                 *
+         *                                                            *
+         * Syntax:    %DUMPLOGX                                       *
+         *                                                            *
+         * Author:    Lionel B. Dyck                                  *
+         *            Kaiser Permanente                               *
+         *            Walnut Creek, CA 94598                          *
+         *            (925) 926-5332                                  *
+         *            Internet: lionel.b.dyck@kp.org                  *
+         *                                                            *
+         * History:                                                   *
+         *            02/14/00 - change to use date('b') calculations *
+         *            12/13/99 - update to understand scal            *
+         *                     - remove obsolete mvs.dump.*           *
+         *            11/05/99 - update for y2k                       *
+         *            10/20/99 - fixup for svcdump, etc.              *
+         *            09/17/99 - fix date/format for svcdump          *
+         *            08/11/99 - support svcdump dsnames              *
+         *            ...                                             *
+         *            05/06/96 - created                              *
+         *                                                            *
+         * ---------------------------------------------------------- */
+         arg option
+         if length(option) > 0 then action = 'no'
+
+         /* ------------------------------------- *
+          * setup the dumplog variable            *
+          * ------------------------------------- */
+          system = mvsvar('sysname')
+          select
+             when substr(system,2,1) = 1 then  env = "SDEV"
+             when substr(system,2,1) = 2 then  env = "SPRD"
+             otherwise   env = "NCAL"
+             end
+          dumplog = "'SYSL."env".DUMPLOG'"
+          if env = "NCAL" then
+             dumplog = "'MVS.DUMPLOG'"
+
+         dump_dsn = ""
+         m_id     = "DUMPLOGX: "
+         count    = 0
+
+         say m_id"Starting at" date() time()
+
+         "Alloc f(dumplogi) ds("dumplog") shr"
+         "Execio * diskr dumplogi (finis stem log."
+         "Free f(dumplogi)"
+
+         logo.1 = log.1
+         logo.2 = log.2
+         logo.3 = log.3
+         j = 3
+
+         datex = date('b')
+
+         do i = 4 to log.0 /* start with record 4 */
+            parse value log.i with owner 12 dsn title
+            dsn = strip(dsn)
+            dsnx = translate(dsn," ",".")
+            Select
+             When word(dsnx,1) = "SVCDUMP" then do
+                  date_dsn = right(word(dsnx,4),6)
+                  end
+             When pos("SYS.S",dsn) > 0 then do
+                  date_dsn = right(word(dsnx,3),6)
+                  end
+             otherwise do
+                       say "Error in date format for" dsn
+                       end
+            end
+            dsn = "'"strip(dsn)"'"
+
+            parse value date_dsn with  yy 3 mm 5 dd .
+            date_dsn = strip(mm)"/"strip(dd)"/"strip(yy)
+            date_dsn = date('b',date_dsn,'u')
+
+          /* ----------------------------------------------------- *
+           * diff_days is days between today and dump create       */
+           diff_days = datex - date_dsn
+
+            if length(strip(owner)) = 0 then call test_expire
+            if reason = 1 then iterate
+            call listdsi dsn "norecall"
+            sysreason = sysreason /* remove leading zero's */
+            if sysreason = 5 then say m_id"Dropping log entry for:" dsn
+            if sysreason = 5 then iterate
+            dump_dsn = dump_dsn dsn
+            j = j + 1
+            logo.j = log.i
+            end
+
+         call Outtrap "listc."
+         "Listc level(svcdump)"
+         call Outtrap "Off"
+
+         Do i = 1 to listc.0
+            if left(listc.i,3) <> "NON" then iterate
+            parse value listc.i with . 17 listc_dsn .
+            if length(listc_dsn) < 26 then iterate
+            if pos(listc_dsn,dump_dsn) > 0 then iterate
+            say m_id""listc_dsn 'not found in MVS.DUMPLOG and will be deleted'
+            call listdsi "'"listc_dsn"' NoRecall"
+            if action = "no" then iterate
+            say m_id"Deleting dsn:" listc_dsn
+            count = count + 1
+            if sysreason+0 = 9 then "Hdel '"listc_dsn"'"
+                               else "Del  '"listc_dsn"'"
+            end
+
+         if j = log.0 then do
+            say m_id"No updates required" date() time()
+            say m_id"Dumps deleted:   " count
+            exit
+            end
+
+         if action <> "no" then do
+            "Alloc f(dumplogo) ds("dumplog") shr"
+            "Execio * diskw dumplogo (finis stem logo."
+            "Free f(dumplogo)"
+            end
+
+         say m_id"Updates Performed" date() time()
+         say m_id"Dumps deleted:   " count
+
+         Exit
+
+         Test_Expire:
+         reason = 0
+         if system = "RSYS" then call test_expire_1
+                            else call test_expire_2
+         if reason = 1 then return
+         if pos("CICS DUMP",title) > 0 then do
+              if pos("TST",title) > 0 then call test_expire_1
+              if pos("ACC",title) > 0 then call test_expire_1
+              if pos("DBC",title) > 0 then call test_expire_1
+              if pos("DEV",title) > 0 then call test_expire_1
+              if pos("NTG",title) > 0 then call test_expire_1
+              if pos("REG",title) > 0 then call test_expire_1
+              if pos("TPN",title) > 0 then call test_expire_1
+              end
+         return
+
+         Test_Expire_1:
+         if diff_days > 5 then do
+            say m_id""dsn "has expired after 5 days",
+                     "and is being deleted (1)"
+            say m_id""title
+            count = count + 1
+            "Hdel" dsn
+            reason = 1
+            end
+         return
+
+         Test_Expire_2:
+         if diff_days > 30 then do
+            say m_id""dsn "has expired after" ,
+            "30 days and is being deleted (2)"
+            say m_id""title
+            if action <> "no" then do
+               count = count + 1
+               "Hdel" dsn
+               end
+             reason = 1
+            end
+         return

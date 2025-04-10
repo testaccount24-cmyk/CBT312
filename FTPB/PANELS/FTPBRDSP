@@ -1,0 +1,30 @@
+)Attr Default(%+_)
+/* % type(text  ) intens(high)              Defaults displayed for */
+/* + type(text  ) intens(low )                   information only  */
+/* _ type( input) intens(high) caps(on ) just(left )               */
+   ! type( input) intens(high) caps(on ) just(left ) hilite(uscore)
+   @ type(output) intens(low ) caps(off) just(left )
+   $ type(output) intens(low ) caps(off) just(left ) color(yellow)
+   ~ type(text) intens(high) color(blue) hilite(reverse)
+   ` type(text) intens(high) color(red)
+)Body  Expand(//)
+%-/-/- ~FTP Get Dataset Specifications+ -/-/-
+%Command ===>_zcmd
+%
+%Processing remote datasets with hlq of:@rdsname                      +
+%
++Local Dataset Options for%Get+processing:
++
++  Local HLQ to use: !newhlq                       +
++    (will replace the remote hlq)
++
++Notes:   1. The process will use the MVSGET subcommand and will
++            re-allocate the local dataset if it currently exists.
++
+)Init
+  .help = ftpbrdsh
+)Proc
+  ver (&newhlq,nb,dsname)
+)End
+/* 2024-01-03  MRM  2.032 Variables sdsname->ldsname, tdsname->rdsname        */
+/*                        Remote data set reference corrected                 */

@@ -1,0 +1,116 @@
+* ---------------------------------------- *
+* This is a set of sample omvs commands    *
+* to demonstrate some of the capabilities. *
+* ---------------------------------------- *
+
+* find a file by name
+omvs su;find &dir -name '&filename'
+
+* find file in /u/files.all
+omvs grep '&string' /u/files.all
+
+* list contents of /etc/rc
+omvs cat /etc/rc
+
+* ----------------------------------------------- *
+* Edit the z/OS documentation webpage (html file) *
+* using oedit.                                    *
+* ----------------------------------------------- *
+select cmd(oedit /usr/lpp/internet/server_root/pub/zosdocn.html)
+
+* List all active processes (must be uid 0 to work)
+omvs su;ps -A
+omvs su;ps -A | grep tect
+
+* list contents of 'sys1.parmlib(ieasys00)'
+omvs cat "//'sys1.parmlib(ieasys00)'"
+
+* check the internet directory (UDL must be upper case
+* ------------------------------------------------------- *
+* Check the contents of the internet directory            *
+* --- Note: the UDL must be upper case for udlist to work *
+* ------------------------------------------------------- *
+select pgm(isrdslst) parm(UDL +
+   /usr/lpp/internet/server_root/pub) suspend
+select pgm(isrdslst) parm(UDL &zparm) suspend
+
+* oedit working html file (SYP Only)
+select cmd(oedit /usr/lpp/internet/server_root/pub/zosdocn.html)
+* -------------------------------------------------- *
+* After updating and verifying that the zosdocn.html *
+* is correct then run the following  multi-part cmd  *
+* 1. change to superuser                             *
+* 2. make a copy of the current zosdoc.html          *
+* 3. change permissions to anyone can read it        *
+* 4. copy zosdocn.html over zosdoc.html              *
+* 5. list to verify                                  *
+* -------------------------------------------------- *
+omvs su; +
+cp /usr/lpp/internet/server_root/pub/zosdoc.html +
+ /usr/lpp/internet/server_root/pub/zosdoc.html.d&yy&mm&dd..t&hhmm; +
+chmod 777 +
+ /usr/lpp/internet/server_root/pub/zosdoc.html.d&yy&mm&dd..t&hhmm; +
+cp /usr/lpp/internet/server_root/pub/zosdocn.html +
+  /usr/lpp/internet/server_root/pub/zosdoc.html; +
+ls -la /usr/lpp/internet/server_root/pub/zosdoc*
+
+* report the current directory and then list it
+omvs pwd;ls -la
+
+* test of omvs command
+OMVS pwd;ls -laR
+
+* list the /etc directory
+omvs ls -laR /etc
+
+* display the contents of the /tmp directory
+omvs ls -la /tmp/
+
+* test of omvs command
+omvs cd /etc;ls -laR
+
+* display a file that must be accessed as superuser
+omvs su;cat /var/spool/cron/logarchive.parm
+
+
+* ----------------------------------------------------- *
+* Mount a filesystem - sample is the home directory     *
+* and then list it                                      *
+*                                                       *
+*                                                       *
+* NOTE: DO NOT mount the filesystem for the active LPAR *
+*       as it is already mounted                        *
+* ----------------------------------------------------- *
+MOUNT FI('T311LBD.OMVS.HOME.&sysname..ZFS&sysid') +
+           MOUNTPOINT('/home/t311lbd/mount/') +
+           TYPE(ZFS) MODE(RDWR)
+omvs ls -la /home/t311lbd/mount/
+
+* --------------------------------------------------------------- *
+* UnMount a filesystem and then list it to verify that it is gone *
+* --------------------------------------------------------------- *
+UNMOUNT FI('T311LBD.OMVS.HOME.&sysname..ZFS&sysid')
+omvs ls -la /home/t311lbd/mount/
+
+* Mount Syncsort File Systems
+MOUNT FI('EXCUTL.OMVS.MFX210.TPF3.ZFS&sysid') +
+           MOUNTPOINT('/home/t311lbd/mount/') +
+           TYPE(ZFS) MODE(RDWR)
+omvs ls -la /home/t311lbd/mount/
+UNMOUNT FI('EXCUTL.OMVS.MFX210.TPF3.ZFS&sysid')
+MOUNT FI('EXCUTL.OMVS.MFX210.TPF3.ZFS&sysid') +
+           MOUNTPOINT('/home/t311lbd/mounto/') +
+           TYPE(ZFS) MODE(RDWR)
+omvs ls -la /home/t311lbd/mounto/
+
+* Display OMVS information
+
+cons d omvs,s
+cons d omvs,a=all
+cons d omvs,l
+cons d omvs,pipes,all
+cons d omvs,p
+cons d omvs,options
+cons d omvs,so
+cons d omvs,usermounts
+cons d omvs,w

@@ -1,0 +1,38 @@
+  /* --------------------- REXX --------------------- *
+  | ISPF command (CONS) to issue any console command |
+  | and display the results.                         |
+  |                                                  |
+  | The command is issued using SDSF.                |
+  |                                                  |
+  | The results are displayed using STEMEDIT.        |
+  |         -- From CBT File 895                     |
+  * ------------------------------------------------ */
+  arg xcmd
+  address ispexec
+  'control errors return'
+  if strip(xcmd) = '' then do
+    zerrhm    = ''
+    zerralrm  = 'NO'
+    zerrtp    = 'Notify'
+    zerrsm = 'Error.'
+    zerrlm = 'The' sysvar('sysicmd') 'requires a z/OS command as' ,
+      'a parameter (e.g.' sysvar('sysicmd') 'D T) - try again.'
+    'setmsg msg(isrz002)'
+    exit 4
+  end
+  isfcons = sysvar('sysuid')
+  rc = isfcalls('on')
+  do until xcmd = ''
+    parse value xcmd with cmd';'xcmd
+    Address SDSF "ISFSLASH '"cmd"' (WAIT)"
+    erc = rc
+    if erc > maxrc then maxrc = erc
+    len = 0
+    do i = 1 to isfulog.0
+      isfulog.i = strip(substr(isfulog.i,44))
+      if length(isfulog.i) > len
+      then len = length(isfulog.i)
+    end
+    Address TSO
+    call stemedit 'view',isfulog.,,,'Console Display',,len,'V'
+  end

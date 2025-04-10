@@ -1,0 +1,52 @@
+Installation
+
+This application is distributed in a PDS with the primary members (EXEC
+and PANELS) in TSO Transmit (IDTF) format.  To use this dialog you
+need to issue TSO EXEC 'restored.dsname(RECEIVE)' which will convert
+the EXEC and PANELS members into an EXEC library and a PANELS library
+from which you can copy them into other datasets.
+
+There will be 7 members:
+
+   $DOC     -  What you are now reading
+   CHANGES  -  What's changed
+   EXEC     -  The REXX Execs in TSO Transmit format.
+   NETRC    -  Information on using a personal NETRC data set.
+   PANELS   -  The ISPF Panels in TSO Transmit format.
+   PDSE     -  Information on how to send PDSE data sets
+   RECEIVE  -  used to receive members EXEC and PANELS into
+               partitioned datasets
+
+After creating the installation data set:
+
+1.  Process members EXEC and PANELS using the RECEIVE exec as described
+    above.
+
+2.  Copy FTPB.PANELS into an ISPF Panel library in your ISPPLIB concatenation.
+
+3.  Copy FTPB.EXEC into a library in your SYSPROC or SYSEXEC concatenation.
+
+    These REXX procedures are written to be installed in a library that is
+    DCB=(RECFM=FB,LRECL=80) or one that is DCB=(RECFM=VB,LRECL=255) to
+    support the format of your SYSEXEC or SYSPROC libraries.
+
+4.  Edit the FTPBCUST exec and make make any updates as required for your
+    installation.
+
+5.  Panel FTPBHF2 needs to be updated with your TCP/IP Host names
+    **** IMPORTANT ****
+
+6.  Read the documentation on how to enable FILETYPE=JES, both the
+    configuration (FTP.DATA) and security implications. This is used
+    when doing an FTP of multiple datasets which uses ADRDSSU and
+    submits a batch job via FTP.
+
+7.  Test by entering from the ISPF Command line:  TSO %FTPB
+
+Comments, questions, suggestions can be directed to (please mention the
+release of the code you are using):
+
+Fun note:  Enter a source dsname of "egg" and see what happens.
+
+   Lionel B. Dyck
+   Internet:  lbdyck@gmail.com

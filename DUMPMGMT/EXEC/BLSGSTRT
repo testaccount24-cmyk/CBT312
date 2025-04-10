@@ -1,0 +1,48 @@
+/************************ REXX ************************************
+ *                                                                *
+ *   KFHP front-end to invocation of IPCS dialog.                 *
+ *                                                                *
+ *   11/18/98-syslbd:  update for os/390                          *
+ *                                                                *
+ ******************************************************************/
+
+/* -------------------------- *
+ * Entry logic.               *
+ * 1. test for applid blsg    *
+ * 2. libdef for cmds in tlib *
+ * 3. invoke ipcs command     *
+ * -------------------------- */
+Address ISPExec
+"Vget (Zapplid)"
+if zapplid <> "BLSG" then do
+    cmd = sysvar('sysicmd')
+   "Libdef ISPTLIB Dataset ID('sys1.sblstbl0')"
+   "Select Cmd(%"cmd") newappl(BLSG) Passlib"
+   "Libdef ISPTLIB"
+   Exit 0
+   End
+
+/* -------------------------- *
+ * Test for JES2 IPCS d/s     *
+ * and if there allocate.     *
+ * -------------------------- */
+if "OK" = sysdsn("'SYS1.SHASPNL0'") then
+   jes2pnl = "'SYS1.SHASPNL0'"
+   else jes2pnl = ""
+if "OK" = sysdsn("'SYS2.SHASPARM'") then
+   Address TSO "Alloc f(IPCSPARM) ds('sys1.shasparm') shr rep"
+
+/* -------------------------- *
+ * Now libdef and go...       *
+ * -------------------------- */
+ADDRESS ISPEXEC
+"LIBDEF ISPSLIB DATASET ID('SYS1.SBLSKEL0')"
+"LIBDEF ISPPLIB DATASET ID('SYS1.SBLSPNL0'" jes2pnl")"
+"LIBDEF ISPMLIB DATASET ID('SYS1.SBLSMSG0')"
+"SELECT PGM(BLSG) PARM(PANEL(BLSPPRIM))"
+"LIBDEF ISPSLIB"
+"LIBDEF ISPPLIB"
+"LIBDEF ISPMLIB"
+if "OK" = sysdsn("'SYS2.SHASPARM'") then
+    Address TSO "Free f(IPCSPARM)"
+Exit 0

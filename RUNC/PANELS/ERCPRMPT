@@ -1,0 +1,18 @@
+)Attr Default(%+_)
+   @ type(output) intens(high)  caps(off) just(left )
+   $ type( input) intens(high) caps(on ) just(left ) hilite(uscore)
+   + type(text) intens(low)
+)Body window(69,9) expand(\\)
+%-\-\-+RUNC Command Dataset Prompt%-\-\-
+%Command ===>_zcmd
++
++Enter Dataset Name:$ercdsn                                        +
++
++Note: Use ERC /SET to change this dataset name in the future
++
++Press PF3 to continue
+)Init
+ .cursor = ercdsn
+)Proc
+  ver (&ercdsn,dsnamepq)
+)End

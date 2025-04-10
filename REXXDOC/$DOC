@@ -1,0 +1,37 @@
+REXXDOC is a simple ISPF Edit Macro that will generate a documentation
+box within a REXX Exec.
+
+Usage:
+===> REXXDOC
+generates an ISPF Popup to allow entry of multiple lines (up to 200)
+of documentation.
+
+===> REXXDOC one line of text
+inserts just that one one of text
+
+Alternate syntax is:  REXXDOC #
+                 or:  REXXDOC #,one line of text
+where # is the number of characters to indent
+
+Samples:
+/* ---------------------------------------------------------- *
+ * one line of text                                           *
+ * ---------------------------------------------------------- */
+
+/* ---------------------------------------------------------- *
+ * This is an example of multiple lines of text               *
+ * being entered into the popup box.                          *
+ * ---------------------------------------------------------- */
+
+To get a blank line from the popup entry place a period '.' in column
+one and leave the rest of the line blank.  Otherwise empty lines will
+not be included in the comment box.
+
+This code is provided as is with no warranty or guarantee.
+
+Code written by:
+Lionel B. Dyck
+Kaiser Permanente Information Technology
+25 N. Via Monte Ave.
+Walnut Creek, Ca 94598
+e-mail: Lionel.B.Dyck@kp.org

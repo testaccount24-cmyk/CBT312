@@ -1,0 +1,35 @@
+)ATTR DEFAULT(%$_)
+   %   TYPE(TEXT)   INTENS(HIGH) SKIP(ON)
+   $   TYPE(TEXT)   INTENS(LOW)  SKIP(ON) COLOR(GREEN)
+   @   TYPE(output) INTENS(HIGH) caps(off)
+   _   TYPE(INPUT)  INTENS(HIGH) CAPS(ON) JUST(LEFT) HILITE(USCORE)
+)BODY EXPAND(\\)
+%Tutorial$-\-\-(%RUNC - Edit Macro$)-\-\-%Tutorial
+%Command ===>_ZCMD
+$
+$RUNC Usage Notes
+$
+$   1. Select records using%C, C#,%CC$or%S, S#,$or%SS$line commands.
+$   2. Use the command option of%-ALL$or%-A$to process all records.
+$   3.%EXCLUDED$records are ignored.
+$   4. Data lines starting with@sep           $are ignored.
+$   5. Blank Data lines are ignored.
+$   6.%BROWSE$and%VIEW$syntax is BROWSE/VIEW DATASET(xxx).
+$   7.%EDIT$syntax is any valid ISPF EDIT command:
+$      - use%;$to separate multiple commands.
+$      - Not all EDIT commands are supported but most are.
+$      - EDIT DATASET(xxx) may be used to edit a dataset or member.
+$   8.%EJES$and%SDSF$syntax is any valid (E)JES or SDSF command:
+$      - use%;$to separate multiple commands.
+$   9.%OMVS$syntax is any omvs command.:
+$      - use%;$to separate multiple commands.
+$      - use%su$to get into superuser state (e.g. omvs su;cd /etc/).
+$  10. Use a%+$at the end of the command to continue to additional records.
+$
+$ \ \ (press%ENTER$to continue) \ \
+)INIT
+ &SEP = '*, /*, //, //*'
+)PROC
+  &ZUP     = #RUNC3A
+  &ZCONT   = #RUNC5
+)END

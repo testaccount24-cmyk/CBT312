@@ -1,0 +1,36 @@
+)Attr Default(%+_)
+/* % type(text  ) intens(high)              Defaults displayed for */
+/* + type(text  ) intens(low )                   information only  */
+/* _ type( input) intens(high) caps(on ) just(left )               */
+   ! type( input) intens(high) caps(on ) just(left ) pad('_')
+   @ type(output) intens(high) caps(off) just(left ) color(yellow)
+   $ type( text)  intens(high) caps(off) just(left ) color(yellow)
+   ¬ type( input) intens(low ) caps(off) just(asis ) pad(' ')
+   ~ type(text) intens(high) color(blue) hilite(reverse)
+)Body Expand(//)
+%-/-/-~CAView Database Selection Table@ver %/-/-
+%Command ===>_zcmd                                 / /%Scroll ===>_amt +
+@pcmds
+$Selections: C:CA-Dialog V:Stats VF:Stats Full or anything else to select
+%Sel  Description                                  Database
++
+)Model
+!z  +¬z                                          +¬z
+)Init
+ .help = cavxtrth
+ .ZVARS = '(sel cavdbdes cavdb)'
+ &amt = CSR
+ if (&admin EQ OK)
+    &pcmds = 'Admin Selections: R:Reorg'
+ if (&admin NE OK)
+    &pcmds = &z
+)Reinit
+)Proc
+ if (&ztdsels = 0000)
+    &row = .csrrow
+    if (&row NE 0)
+        if (&sel = &z)
+            &sel = S
+ if (&ztdsels NE 0000)
+      &row = &z
+)End

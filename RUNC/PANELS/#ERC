@@ -1,0 +1,21 @@
+)ATTR DEFAULT(%+_)
+   %   TYPE(TEXT)  INTENS(HIGH) SKIP(ON)
+   +   TYPE(TEXT)  INTENS(LOW)  SKIP(ON) COLOR(GREEN)
+   _   TYPE(INPUT) INTENS(HIGH) CAPS(ON) JUST(LEFT) HILITE(USCORE)
+)BODY EXPAND(\\)
+%Tutorial+-\-\-(%ERC - Command+)-\-\-%Tutorial
+%Command ===>_ZCMD
++
++The ERC command is an ISPF command to open the PDS or PDS Member of the
++command dataset for use with the RUNC ISPF Edit command.
++
++Syntax: %ERC options
++
++Options:  %blank+Display member list of Command PDS (default)
++          %?+or%HELP+... Display tutorial
++          %/SET+........ Prompt to change the Command PDS dataset name
++          %member+...... Member Name or Member Mask
++
++The ERC PDS can be FB or VB and any LRECL (suggest FB 80 or VB 255)
+)PROC
+)END

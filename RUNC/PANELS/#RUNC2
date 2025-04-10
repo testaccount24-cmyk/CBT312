@@ -1,0 +1,32 @@
+)ATTR DEFAULT(%$_)
+   %   TYPE(TEXT)  INTENS(HIGH) SKIP(ON)
+   $   TYPE(TEXT)  INTENS(LOW)  SKIP(ON) COLOR(GREEN)
+   _   TYPE(INPUT) INTENS(HIGH) CAPS(ON) JUST(LEFT) HILITE(USCORE)
+)BODY EXPAND(\\)
+%Tutorial$-\-\-(%RUNC - Edit Macro$)-\-\-%Tutorial
+%Command ===>_ZCMD
+$
+$Example commands:
+$
+%BROWSE Dataset(&&dsn)               %OMVS ls -la &&dir
+%BROWSE Member(mbr)                  %OMVS cd /u;ls -la
+%CONS d a,l                          %PDS &&dsn
+%EDIT c xx yy all                    %PDS MY.EXEC
+%EDIT only xyz                       %RENAME &&dsn &&vol from-mbr to-mbr
+%EDIT Dataset(&&dsn)                 %RENAME dataset * from-mbr to-mbr
+%EDIT Dataset(&&dsn) Volume(volser)  %SDSF D A,ALL
+%EDIT Member(&&mbr)                  %SELECT CMD(PDS &&dsn)
+%EJES D A,ALL                        %SELECT PANEL(&&panel)
+%LISTC ENT(&&dsn) ALL                %SLEEP seconds  (default is 5 seconds)
+%LISTD &&dsn%VIEW Member(mbr)        %VIEW Dataset(&&dsn) Volume(volser)
+$
+$Use of symbolics will generate an ISPF Panel to prompt for the value.
+$
+$Use%SET symbol = value$to define your own fixed symbolic (will not be prompted)
+$       %PROMPT$or%NOPROMPT$for RUNC default symbolics (see -BS)
+$
+$ \ \ (press%ENTER$to continue) \ \
+)PROC
+  &ZUP     = #RUNC2
+  &ZCONT   = #RUNC2A
+)END
